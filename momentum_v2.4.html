@@ -1,0 +1,2063 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Momentum v2.4 | Editor de fases</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+  body {
+    min-height: 100vh; min-height: 100dvh; padding: 0;
+    background: #15191f; color: #edf2f7;
+    font: 14px/1.45 system-ui, -apple-system, Segoe UI, sans-serif;
+    overscroll-behavior: none;
+  }
+  main { position: fixed; inset: 0; width: 100%; height: 100%; height: 100dvh; }
+  header, .hud, .legend, .controls { display: none !important; }
+  .game-wrap {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    overflow: hidden; border: 0; border-radius: 0; background: #202832;
+  }
+  canvas {
+    display: block; width: 100%; height: 100%;
+    image-rendering: auto; touch-action: none;
+  }
+  .mobile-controls {
+    display: flex; position: fixed; z-index: 5;
+    left: max(16px, env(safe-area-inset-left));
+    right: max(16px, env(safe-area-inset-right));
+    bottom: max(16px, env(safe-area-inset-bottom));
+    justify-content: space-between; align-items: flex-end; gap: 16px;
+    margin: 0; user-select: none; -webkit-user-select: none;
+    pointer-events: none;
+  }
+  .mobile-controls .cluster { display: flex; gap: 12px; }
+  .mobile-controls button {
+    pointer-events: auto;
+    width: 74px; height: 68px; min-width: 74px; min-height: 68px;
+    padding: 0 10px;
+    border: 1px solid #ffffff65; border-radius: 16px;
+    background: #283441d9; color: white; font-size: 24px;
+    font-weight: 600;
+    box-shadow: 0 4px 0 #101820b8, 0 7px 18px #0004;
+    transition: transform 80ms ease, background-color 80ms ease,
+      border-color 80ms ease, box-shadow 80ms ease;
+    touch-action: none; -webkit-tap-highlight-color: transparent;
+    backdrop-filter: blur(4px);
+  }
+  .mobile-controls button:active,
+  .mobile-controls button.is-pressed {
+    transform: translateY(3px) scale(.97);
+    background: #49657beF;
+    border-color: #ffffffb0;
+    box-shadow: 0 1px 0 #101820b8, 0 3px 10px #0003;
+  }
+  .mobile-controls button[data-key="Space"] {
+    width: 104px; min-width: 104px;
+    font-size: 16px; letter-spacing: .04em;
+    background: #334b5bdc;
+    border-color: #a9c6d8a0;
+  }
+  .mobile-controls button[data-key="Space"]:active,
+  .mobile-controls button[data-key="Space"].is-pressed {
+    background: #557f99f2;
+  }
+  .performance-monitor {
+    position: fixed; z-index: 7; top: max(10px, env(safe-area-inset-top));
+    left: max(10px, env(safe-area-inset-left));
+    padding: 6px 9px; border: 1px solid #ffffff35; border-radius: 8px;
+    background: #101820d9; color: #dce7f1;
+    font: 12px/1.3 ui-monospace, SFMono-Regular, Consolas, monospace;
+    pointer-events: none;
+  }
+  .performance-monitor[hidden] { display: none !important; }
+  #fullscreen-toggle {
+    position: fixed; z-index: 6; top: max(10px, env(safe-area-inset-top));
+    right: max(10px, env(safe-area-inset-right));
+    width: 38px; height: 38px; border: 1px solid #ffffff45;
+    border-radius: 10px; background: #202832aa; color: #fff;
+    font-size: 20px; line-height: 1; touch-action: manipulation;
+  }
+  @media (orientation: landscape) {
+    main {
+      display: grid;
+      place-items: center;
+      background: radial-gradient(ellipse at center, #202832 0%, #15191f 72%);
+    }
+    .game-wrap {
+      position: relative;
+      inset: auto;
+      width: min(100vw, 177.7778dvh);
+      height: auto;
+      aspect-ratio: 16 / 9;
+      border: 1px solid #354250;
+      border-radius: 8px;
+      background: #202832;
+      box-shadow: 0 0 0 1px #080b0f, 0 8px 28px #0005;
+    }
+    canvas { width: 100%; height: 100%; }
+  }
+  @media (orientation: landscape) and (pointer: coarse) {
+    .mobile-controls {
+      left: max(18px, env(safe-area-inset-left));
+      right: max(18px, env(safe-area-inset-right));
+      bottom: max(14px, env(safe-area-inset-bottom));
+    }
+    .mobile-controls button:not([data-key="Space"]) {
+      width: 84px; height: 78px; min-width: 84px; min-height: 78px;
+    }
+    .mobile-controls button[data-key="Space"] {
+      width: 100px; min-width: 100px;
+    }
+  }
+  #mode-toggle { position:fixed; z-index:12; top:12px; left:12px; padding:10px 14px; border:1px solid #ffffff50; border-radius:10px; color:#fff; background:#18232fe8; font-weight:700; cursor:pointer; }
+  #editor-tools { position:fixed; z-index:11; left:12px; top:62px; display:none; flex-wrap:wrap; max-width:min(420px, calc(100vw - 180px)); gap:5px; padding:7px; border:1px solid #ffffff30; border-radius:12px; background:#111a24eF; }
+  #editor-tools button { width:38px; height:38px; border:1px solid #ffffff40; border-radius:8px; color:#fff; background:#263442; font-size:22px; font-weight:700; cursor:pointer; }
+  #editor-tools button.selected { background:#246b91; outline:2px solid #8bdcff; }
+  #editor-tools button:disabled { opacity:.35; cursor:default; }
+  #editor-hint { line-height:1.45; }
+  #block-menu { position:fixed; z-index:10; right:10px; top:62px; bottom:12px; width:158px; overflow-y:auto; display:none; padding:9px; border:1px solid #ffffff35; border-radius:12px; background:#111a24eF; }
+  #block-menu h3 { margin:0 0 8px; font-size:13px; color:#cbd5e1; }
+  #phase-tools { border-top:1px solid #ffffff25; margin-top:10px; padding-top:10px; }
+  #phase-tools label { display:block; margin:0 0 5px; color:#cbd5e1; font-size:11px; }
+  #phase-name { width:100%; min-width:0; margin-bottom:7px; padding:7px; border:1px solid #ffffff35; border-radius:7px; background:#1b2732; color:#fff; font:inherit; font-size:12px; }
+  #phase-tools button { display:block; width:100%; margin:0 0 6px; padding:8px 6px; border:1px solid #ffffff2b; border-radius:8px; color:#fff; background:#263442; text-align:center; font-size:12px; cursor:pointer; }
+  #phase-status { min-height:30px; color:#b8c7d5; font-size:11px; overflow-wrap:anywhere; }
+  #phase-file-input { display:none; }
+  #block-menu button { display:flex; align-items:center; gap:8px; width:100%; margin:0 0 6px; padding:8px 6px; border:1px solid #ffffff2b; border-radius:8px; color:#fff; background:#263442; text-align:left; font-size:12px; cursor:pointer; }
+  #block-menu button.selected { border:2px solid #8bdcff; background:#24506a; padding:7px 5px; }
+  .block-swatch { flex:0 0 19px; width:19px; height:19px; border:1px solid #ffffff60; border-radius:3px; }
+  #editor-hint { position:fixed; z-index:9; left:12px; bottom:12px; max-width:min(440px, calc(100vw - 190px)); padding:7px 10px; border-radius:8px; color:#dbe7f2; background:#111a24c9; font-size:12px; display:none; pointer-events:none; }
+  body.editor-mode #editor-tools, body.editor-mode #block-menu, body.editor-mode #editor-hint { display:flex; }
+  body.editor-mode #block-menu { display:block; }
+  body.editor-mode .mobile-controls { display:none !important; }
+  @media (pointer: coarse) { #block-menu { width:142px; } #editor-tools button { width:48px; height:48px; } }
+  @media (prefers-reduced-motion: reduce) {
+    .mobile-controls button { transition: none; }
+  }
+  @media (pointer: fine) { .mobile-controls { display: none; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1><span>Momentum</span> / v2.4</h1>
+    <div class="subtitle">Teste de movimento e materiais de plataforma</div>
+  </header>
+  <div class="game-wrap">
+    <canvas id="game" width="960" height="540" aria-label="Protótipo de jogo de plataforma"></canvas>
+  </div>
+  <div class="hud">
+    <span id="status">Material: nenhum</span>
+    <span id="velocity">Velocidade: X 0.0 · Y 0.0</span>
+    <span>R: reiniciar posição</span>
+  </div>
+  <section class="legend" aria-label="Legenda das plataformas">
+    <div class="legend-item"><span class="swatch" style="background:#52c878"></span>Normal: sem efeito</div>
+    <div class="legend-item"><span class="swatch" style="background:#70d7f2"></span>Gelo: pouca fricção</div>
+    <div class="legend-item"><span class="swatch" style="background:#8b5a3c"></span>Grudenta: movimento lento</div>
+    <div class="legend-item"><span class="swatch" style="background:#ffd84a"></span>Elástica: devolve impulso</div>
+    <div class="legend-item"><span class="swatch" style="background:#8995a3"></span>Esteira: impulso horizontal</div>
+    <div class="legend-item"><span class="swatch" style="background:#c99a69"></span>Quebradiça: quebra e volta</div>
+  </section>
+  <div class="controls">
+    <strong>Controles:</strong> <kbd>A</kbd>/<kbd>D</kbd> ou <kbd>←</kbd>/<kbd>→</kbd> para andar,
+    <kbd>Espaço</kbd>/<kbd>W</kbd>/<kbd>↑</kbd> para pular. Segure o pulo para sentir o controle aéreo.
+    Experimente chegar rápido ao gelo e pousar na plataforma elástica.
+  </div>
+  <button id="mode-toggle" type="button">Modo: Jogar</button>
+  <div id="editor-tools" aria-label="Ferramentas do editor">
+    <button type="button" data-tool="camera" title="Câmera livre (arrastar)" aria-label="Câmera livre">C</button>
+    <button type="button" data-tool="place" title="Colocar tiles" aria-label="Colocar tiles">□</button>
+    <button type="button" data-tool="erase" title="Apagar tiles" aria-label="Apagar tiles">X</button>
+    <button type="button" data-tool="select" title="Selecionar e mover" aria-label="Selecionar e mover">▧</button>
+    <button type="button" data-tool="rect" title="Retângulo preenchido" aria-label="Retângulo preenchido">■</button>
+    <button type="button" data-tool="outline" title="Retângulo sem preenchimento" aria-label="Retângulo sem preenchimento">▢</button>
+    <button type="button" data-tool="line" title="Linha" aria-label="Linha">╱</button>
+    <button type="button" id="undo-action" title="Desfazer (Ctrl+Z)" aria-label="Desfazer">↶</button>
+    <button type="button" id="redo-action" title="Refazer (Ctrl+Y)" aria-label="Refazer">↷</button>
+    <button type="button" id="duplicate-selection" title="Duplicar seleção" aria-label="Duplicar seleção">⧉</button>
+    <button type="button" id="zoom-out" title="Afastar" aria-label="Afastar">−</button>
+    <button type="button" id="zoom-in" title="Aproximar" aria-label="Aproximar">+</button>
+    <button type="button" id="zoom-reset" title="Zoom 100%" aria-label="Zoom 100%">1:1</button>
+  </div>
+  <aside id="block-menu" aria-label="Menu de blocos">
+    <h3>MENU DE BLOCOS</h3>
+    <button data-material="normalWall" class="selected"><span class="block-swatch" style="background:#52c878"></span>Normal</button>
+    <button data-material="iceWall"><span class="block-swatch" style="background:#70d7f2"></span>Gelo</button>
+    <button data-material="stickyWall"><span class="block-swatch" style="background:#8b5a3c"></span>Grudenta</button>
+    <button data-material="bouncyWall"><span class="block-swatch" style="background:#ffd84a"></span>Elástica</button>
+    <button data-material="conveyorWall"><span class="block-swatch" style="background:#8995a3"></span>Esteira</button>
+    <button data-material="crumbleWall"><span class="block-swatch" style="background:#c99a69"></span>Quebradiça</button>
+    <h3 style="margin-top:10px">ESPECIAL</h3>
+    <button data-material="spawn"><span class="block-swatch" style="background:#fff;color:#111;text-align:center">S</span>Spawn Anchor</button>
+    <button id="apply-material-selection" type="button" title="Aplicar o material selecionado aos tiles selecionados">Aplicar material à seleção</button>
+    <section id="phase-tools" aria-label="Salvar e compartilhar fase">
+      <h3>FASE</h3>
+      <label for="phase-name">Nome da fase</label>
+      <input id="phase-name" type="text" maxlength="80" value="Minha fase" autocomplete="off">
+      <button id="save-phase" type="button">Salvar agora</button>
+      <button id="export-phase" type="button">Exportar JSON</button>
+      <button id="import-phase" type="button">Importar JSON</button>
+      <input id="phase-file-input" type="file" accept=".json,application/json">
+      <div id="phase-status" role="status" aria-live="polite">Rascunho local automático ativo.</div>
+    </section>
+  </aside>
+  <div id="editor-hint">C: mover câmera · □: colocar · X: apagar · ▧: selecionar/mover · ■: retângulo preenchido · ▢: contorno · ╱: linha · Ctrl+Z/Y: desfazer/refazer · roda/pinça: zoom · linha vermelha: Void</div>
+  <button id="fullscreen-toggle" type="button" aria-label="Alternar tela cheia" title="Tela cheia">⛶</button>
+  <div id="performance-monitor" class="performance-monitor" hidden>FPS: -- · quadro: -- ms</div>
+  <div class="mobile-controls" aria-label="Controles para celular">
+    <div class="cluster">
+      <button data-key="ArrowLeft" aria-label="Mover para esquerda">←</button>
+      <button data-key="ArrowRight" aria-label="Mover para direita">→</button>
+      <button data-key="ArrowDown" aria-label="Wall slide / deslizar pela parede">↓</button>
+    </div>
+    <button data-key="Space" aria-label="Pular">PULAR ↑</button>
+  </div>
+</main>
+<script>
+"use strict";
+
+/*
+ * Momentum: protótipo de game feel.
+ * As plataformas compartilham a classe-base Platform. Cada material sobrescreve
+ * apenas os ganchos de comportamento de que precisa.
+ */
+
+const canvas = document.querySelector("#game");
+const ctx = canvas.getContext("2d");
+const LOGICAL_WIDTH = 960;
+const LOGICAL_HEIGHT = 540;
+
+// Aumenta a resolução de desenho em telas de alta densidade sem alterar
+// as coordenadas lógicas usadas pelo jogo ou sua física.
+function resizeCanvasForDisplay() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  canvas.width = Math.round(LOGICAL_WIDTH * dpr);
+  canvas.height = Math.round(LOGICAL_HEIGHT * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+resizeCanvasForDisplay();
+window.addEventListener("resize", resizeCanvasForDisplay);
+const statusEl = document.querySelector("#status");
+const velocityEl = document.querySelector("#velocity");
+const fullscreenToggle = document.querySelector("#fullscreen-toggle");
+fullscreenToggle.addEventListener("click", async () => {
+  try {
+    if (!document.fullscreenElement) {
+      await document.documentElement.requestFullscreen();
+    } else {
+      await document.exitFullscreen();
+    }
+  } catch (_) {
+    // Alguns navegadores móveis não permitem tela cheia via arquivo local.
+  }
+});
+document.addEventListener("fullscreenchange", () => {
+  fullscreenToggle.textContent = document.fullscreenElement ? "×" : "⛶";
+  fullscreenToggle.setAttribute("aria-label", document.fullscreenElement ? "Sair da tela cheia" : "Alternar tela cheia");
+});
+
+const WORLD = { width: 4000, height: 1200, gravity: 1100 };
+const VOID_Y = 850;
+let cameraX = 0;
+let cameraY = 0;
+let viewScale = 1;
+let editorMode = false;
+let activeTool = "camera";
+let activeMaterial = "normalWall";
+let pointerState = null;
+let lastEditedCell = "";
+const COLORS = {
+  normal: "#52c878", ice: "#70d7f2", sticky: "#8b5a3c",
+  bouncy: "#ffd84a", conveyor: "#8995a3", crumble: "#c99a69"
+};
+const keys = new Set();
+const pressed = new Set();
+let visualTime = 0; // Relógio exclusivo para animações visuais; não afeta a física.
+
+const performanceMonitor = document.querySelector("#performance-monitor");
+
+// Campos editáveis devem receber o teclado normalmente, sem acionar a gameplay.
+function isEditableTarget(target) {
+  return target instanceof Element && Boolean(target.closest(
+    'input, textarea, select, [contenteditable=""], [contenteditable="true"], [role="textbox"]'
+  ));
+}
+
+window.addEventListener("keydown", (event) => {
+  if (isEditableTarget(event.target)) return;
+
+  if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space", "KeyS"].includes(event.code)) event.preventDefault();
+  if (event.code === "F3" && !event.repeat) {
+    event.preventDefault();
+    performanceMonitor.hidden = !performanceMonitor.hidden;
+  }
+  if (!keys.has(event.code)) pressed.add(event.code);
+  keys.add(event.code);
+  if (event.code === "KeyR") resetPlayer();
+});
+window.addEventListener("keyup", (event) => keys.delete(event.code));
+
+document.querySelectorAll("[data-key]").forEach((button) => {
+  const key = button.dataset.key;
+  let activePointerId = null;
+
+  const down = (event) => {
+    event.preventDefault();
+    if (activePointerId !== null) return;
+    if (event.button !== undefined && event.button !== 0) return;
+
+    activePointerId = event.pointerId;
+    if (!keys.has(key)) pressed.add(key);
+    keys.add(key);
+    button.classList.add("is-pressed");
+
+    // Captura o ponteiro para acompanhar o mesmo toque até ele terminar.
+    try {
+      button.setPointerCapture(event.pointerId);
+    } catch (_) {}
+  };
+
+  const release = (event) => {
+    if (event && activePointerId !== null &&
+        event.pointerId !== undefined &&
+        event.pointerId !== activePointerId) return;
+
+    if (event) event.preventDefault();
+    keys.delete(key);
+    button.classList.remove("is-pressed");
+
+    const pointerId = activePointerId;
+    activePointerId = null;
+    if (pointerId !== null) {
+      try {
+        if (button.hasPointerCapture(pointerId)) {
+          button.releasePointerCapture(pointerId);
+        }
+      } catch (_) {}
+    }
+  };
+
+  button.addEventListener("pointerdown", down);
+  button.addEventListener("pointerup", release);
+  button.addEventListener("pointercancel", release);
+  button.addEventListener("lostpointercapture", release);
+
+  // Com pointer capture, pointerleave pode não ocorrer quando o dedo sai
+  // do botão. Por isso, verificamos as coordenadas em cada pointermove.
+  button.addEventListener("pointermove", (event) => {
+    if (activePointerId !== event.pointerId) return;
+
+    const rect = button.getBoundingClientRect();
+    const outside =
+      event.clientX < rect.left ||
+      event.clientX >= rect.right ||
+      event.clientY < rect.top ||
+      event.clientY >= rect.bottom;
+
+    if (outside) release(event);
+  });
+
+  // Também cobre navegadores que disparam pointerleave sem pointermove.
+  button.addEventListener("pointerleave", (event) => {
+    if (activePointerId === event.pointerId) release(event);
+  });
+});
+const isDown = (...codes) => codes.some((code) => keys.has(code));
+const wasPressed = (...codes) => codes.some((code) => pressed.has(code));
+
+class Platform {
+  constructor({ x, y, shape = [[1, 1, 1, 1, 1]], tileSize = 16, color = COLORS.normal, name = "Normal", isWall = false }) {
+    this.x = x; this.y = y; this.shape = shape; this.tileSize = tileSize;
+    this.color = color; this.name = name; this.isWall = isWall || name === "Parede";
+    this.width = Math.max(...shape.map(row => row.length)) * tileSize;
+    this.height = shape.length * tileSize;
+    this.active = true;
+    this._rectangles = null;
+  }
+  rectangles() {
+    if (!this._rectangles) {
+      const result = [];
+      this.shape.forEach((row, rowIndex) => row.forEach((cell, colIndex) => {
+        if (cell) result.push({
+          x: this.x + colIndex * this.tileSize,
+          y: this.y + rowIndex * this.tileSize,
+          width: this.tileSize, height: this.tileSize
+        });
+      }));
+      this._rectangles = result;
+    }
+    return this._rectangles;
+  }
+  overlapsPlayer(player) {
+    return this.active && this.rectangles().some(rect =>
+      player.x < rect.x + rect.width && player.x + player.width > rect.x &&
+      player.y < rect.y + rect.height && player.y + player.height > rect.y
+    );
+  }
+  onLand(player) { /* Gancho para materiais específicos. */ }
+  update(_dt, _player) {}
+  draw(context) {
+    if (!this.active) return;
+    context.fillStyle = this.color;
+    for (const rect of this.rectangles()) context.fillRect(rect.x, rect.y, rect.width, rect.height);
+
+    // Desenha a borda de cada célula, inclusive as divisões internas,
+    // para manter a aparência de quadradinhos alinhados.
+    context.strokeStyle = "rgba(15, 23, 32, .28)";
+    context.lineWidth = 1;
+    for (const rect of this.rectangles()) {
+      context.strokeRect(rect.x + .5, rect.y + .5, rect.width - 1, rect.height - 1);
+    }
+  }
+}
+
+class NormalPlatform extends Platform {
+  constructor(options) {
+    // Mantém a aparência normal, mas permite identificar paredes e outros
+    // comportamentos especiais sem depender da classe visual.
+    super({ ...options, color: COLORS.normal, name: options.name ?? "Normal" });
+  }
+  draw(context) {
+    if (!this.active) return;
+    super.draw(context);
+    // Iluminação sutil nas bordas superiores/esquerdas, mantendo os cubinhos.
+    context.save();
+    context.strokeStyle = "rgba(226, 255, 233, .22)";
+    context.lineWidth = 1;
+    for (const rect of this.rectangles()) {
+      context.beginPath();
+      context.moveTo(rect.x + 1, rect.y + rect.height - 1);
+      context.lineTo(rect.x + 1, rect.y + 1);
+      context.lineTo(rect.x + rect.width - 1, rect.y + 1);
+      context.stroke();
+    }
+    context.restore();
+  }
+}
+class IcePlatform extends Platform {
+  constructor(options) { super({ ...options, color: COLORS.ice, name: "Gelo" }); }
+  // O jogador preserva mais velocidade horizontal quando solta os controles.
+  get friction() { return 0.22; }
+  draw(context) {
+    if (!this.active) return;
+    // Camada translúcida: o fundo e a grade continuam aparecendo através do gelo.
+    context.save();
+    for (const rect of this.rectangles()) {
+      context.fillStyle = "rgba(112, 215, 242, .58)";
+      context.fillRect(rect.x, rect.y, rect.width, rect.height);
+      context.strokeStyle = "rgba(205, 248, 255, .62)";
+      context.lineWidth = 1;
+      context.strokeRect(rect.x + .5, rect.y + .5, rect.width - 1, rect.height - 1);
+      context.fillStyle = "rgba(255, 255, 255, .28)";
+      context.fillRect(rect.x + 2, rect.y + 2, Math.max(2, rect.width * .42), 1);
+    }
+    // Pequenos brilhos raros e discretos, em posições estáveis por cubinho.
+    for (const rect of this.rectangles()) {
+      const seed = Math.abs(Math.sin(rect.x * 12.9898 + rect.y * 78.233));
+      const phase = (visualTime * (0.45 + seed * 0.2) + seed * 8) % 5.5;
+      if (phase < 0.22) {
+        const px = rect.x + 4 + seed * (rect.width - 8);
+        const py = rect.y + 4 + Math.abs(Math.cos(seed * 19)) * (rect.height - 8);
+        const alpha = 0.35 + 0.55 * (1 - phase / 0.22);
+        context.globalAlpha = alpha;
+        context.fillStyle = "#ffffff";
+        context.fillRect(px, py - 2, 1.5, 5);
+        context.fillRect(px - 2, py, 5, 1.5);
+      }
+    }
+    context.restore();
+  }
+}
+class IceWallPlatform extends IcePlatform {
+  constructor(options) {
+    // Reutiliza o material, visual e física do gelo; muda apenas a orientação e o wall slide.
+    super({ ...options, name: "Parede de Gelo" });
+    this.name = "Parede de Gelo";
+    this.isWall = true;
+  }
+}
+class StickyPlatform extends Platform {
+  constructor(options) { super({ ...options, color: COLORS.sticky, name: "Grudenta" }); }
+  get movementMultiplier() { return 0.48; }
+  get jumpMultiplier() { return 0.75; }
+  draw(context) {
+    if (!this.active) return;
+    super.draw(context);
+    // Bolhas pantanosas em tons próximos ao marrom: pulsam sem alterar colisões.
+    context.save();
+    for (const rect of this.rectangles()) {
+      const seed = Math.abs(Math.sin(rect.x * 5.17 + rect.y * 2.31));
+      // Várias manchas quadradas espalhadas pela superfície, como lama úmida.
+      // Coordenadas determinísticas: os pontos não tremem nem afetam a física.
+      for (let i = 0; i < 7; i++) {
+        const dotSeed = Math.abs(Math.sin((rect.x + 3.7) * (i + 1) * 2.13 + (rect.y + 8.1) * (i + 2) * 1.37));
+        if (dotSeed < 0.08) continue;
+        const pulse = 0.5 + 0.5 * Math.sin(visualTime * (1.5 + dotSeed * 1.3) + dotSeed * Math.PI * 2 + i);
+        const size = 1.5 + dotSeed * 2.0 + pulse * 0.8;
+        const px = rect.x + 2 + dotSeed * (rect.width - 4);
+        const pySeed = Math.abs(Math.sin((rect.y + 4.2) * (i + 1) * 1.91 + (rect.x + 2.6) * 0.73));
+        const py = rect.y + 2 + pySeed * (rect.height - 4);
+        context.globalAlpha = 0.22 + pulse * 0.28;
+        context.fillStyle = i % 3 === 0 ? "#4b2b20" : "#603925";
+        context.fillRect(px - size / 2, py - size / 2, size, size);
+        // Pequeno brilho quente em parte das manchas para sugerir lama molhada.
+        if (i % 2 === 0) {
+          context.globalAlpha = 0.12 + pulse * 0.12;
+          context.fillStyle = "#d49a70";
+          context.fillRect(px - size * 0.2, py - size * 0.2, Math.max(0.6, size * 0.24), Math.max(0.6, size * 0.24));
+        }
+      }
+      // Uma mancha um pouco maior perto da borda em alguns tiles.
+      if (seed >= 0.25) {
+        const pulse = 0.5 + 0.5 * Math.sin(visualTime * 2.1 + seed * Math.PI * 2);
+        const size = 2.2 + pulse * 2.2;
+        const bx = rect.x + (seed < 0.5 ? 1 : rect.width - 1);
+        const by = rect.y + (Math.cos(seed * 8) < 0 ? 1 : rect.height - 1);
+        context.globalAlpha = 0.3 + pulse * 0.3;
+        context.fillStyle = "#4b2b20";
+        context.fillRect(bx - size / 2, by - size / 2, size, size);
+      }
+    }
+    context.restore();
+  }
+}
+class BouncyPlatform extends Platform {
+  constructor(options) {
+    super({ ...options, color: COLORS.bouncy, name: "Elástica" });
+    this.compression = 0;
+  }
+  onLand(player) {
+    // O impulso considera a velocidade de queda, com um mínimo perceptível.
+    player.vy = -Math.max(490, Math.min(760, player.impactSpeed * 0.82));
+    player.grounded = false;
+    player.jumpHoldActive = false;
+    player.jumpReleaseGrace = 0;
+    player.bounceLock = 0.12;
+    player.squash = 1.28;
+    this.compression = 1;
+  }
+  update(dt, _player) {
+    this.compression = Math.max(0, this.compression - dt * 5.5);
+  }
+  draw(context) {
+    if (!this.active) return;
+    super.draw(context);
+    // Quadrados internos que achatam por um instante ao receber o jogador.
+    const squeeze = this.compression;
+    context.save();
+    for (const rect of this.rectangles()) {
+      const inset = 3 + squeeze * 1.2;
+      const squareH = Math.max(2, (rect.height - inset * 2) * (1 - squeeze * 0.48));
+      const squareY = rect.y + (rect.height - squareH) / 2 + squeeze * 1.5;
+      context.fillStyle = "rgba(255, 247, 173, .88)";
+      context.fillRect(rect.x + inset, squareY, rect.width - inset * 2, squareH);
+      context.strokeStyle = "rgba(174, 125, 16, .55)";
+      context.lineWidth = 1;
+      context.strokeRect(rect.x + inset + .5, squareY + .5,
+        Math.max(1, rect.width - inset * 2 - 1), Math.max(1, squareH - 1));
+    }
+    context.restore();
+  }
+}
+class BouncyWallPlatform extends BouncyPlatform {
+  constructor(options) {
+    // Reutiliza a subclasse elástica e seu visual; o impulso lateral é tratado no contato com a parede.
+    super({ ...options, name: "Parede Elástica" });
+    this.name = "Parede Elástica";
+    this.isWall = true;
+  }
+}
+class ConveyorPlatform extends Platform {
+  constructor(options) {
+    super({ ...options, color: COLORS.conveyor, name: "Esteira" });
+    this.direction = options.direction === -1 ? -1 : 1;
+  }
+  // A esteira carrega o jogador a 30% da velocidade horizontal máxima.
+  get conveyorSpeed() { return 100; }
+  draw(context) {
+    if (!this.active) return;
+    super.draw(context);
+    // Cada tile mantém uma seta visível; ela desliza suavemente sem sumir
+    // quando o comprimento da esteira é menor que o espaçamento da animação.
+    context.save();
+    context.lineWidth = 1.8;
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    const vertical = this instanceof WallConveyorPlatform;
+    const direction = this.direction;
+    const travel = ((visualTime * 14) % 4) - 2;
+    const offset = travel * direction;
+    const cx = this.x + this.width / 2 + (vertical ? 0 : offset);
+    const cy = this.y + this.height / 2 + (vertical ? offset : 0);
+    const seed = Math.abs(Math.sin(this.x * 0.173 + this.y * 0.319));
+    context.globalAlpha = 0.95;
+    context.strokeStyle = seed > 0.5 ? "#f2f4f6" : "#c7cdd3";
+    context.beginPath();
+    if (!vertical && direction > 0) {
+      context.moveTo(cx - 4.5, cy - 4);
+      context.lineTo(cx, cy);
+      context.lineTo(cx - 4.5, cy + 4);
+    } else if (!vertical && direction < 0) {
+      context.moveTo(cx + 4.5, cy - 4);
+      context.lineTo(cx, cy);
+      context.lineTo(cx + 4.5, cy + 4);
+    } else if (vertical && direction < 0) {
+      context.moveTo(cx - 4, cy + 4.5);
+      context.lineTo(cx, cy);
+      context.lineTo(cx + 4, cy + 4.5);
+    } else {
+      context.moveTo(cx - 4, cy - 4.5);
+      context.lineTo(cx, cy);
+      context.lineTo(cx + 4, cy - 4.5);
+    }
+    context.stroke();
+    context.restore();
+  }
+}
+class WallConveyorPlatform extends ConveyorPlatform {
+  constructor(options) {
+    super({ ...options, name: "Parede Esteira", isWall: true });
+    this.direction = options.direction < 0 ? -1 : 1;
+  }
+}
+class StickyWallPlatform extends StickyPlatform {
+  constructor(options) {
+    super({ ...options, name: "Parede Grudenta", isWall: true });
+  }
+}
+class CrumblePlatform extends Platform {
+  constructor(options) {
+    super({ ...options, color: COLORS.crumble, name: "Quebradiça" });
+    this.standTime = 0;
+    this.respawnTime = 0;
+    this.broken = false;
+    this.breakDelay = 1;
+    this.breakParticles = [];
+    this.respawnParticles = [];
+    this.chainBreakTimer = null;
+  }
+  breakNow(player) {
+    if (this.broken || this.chainBreakTimer !== null) return;
+    // Descobre a estrutura quebradiça ligada pelas laterais (X/Y, sem diagonais).
+    const connected = getConnectedTiles(this, isCrumbleTile);
+    const distances = getConnectedTileDistances(this, isCrumbleTile);
+    // A peça tocada quebra imediatamente; as vizinhas seguem quase juntas,
+    // com atraso mínimo para uma reação em cadeia essencialmente visual.
+    for (const tile of connected) {
+      if (tile === this || tile.broken || tile.chainBreakTimer !== null) continue;
+      tile.chainBreakTimer = Math.min(0.075, (distances.get(tile) || 1) * 0.008);
+    }
+    this.breakSingle(player);
+  }
+  breakSingle(player) {
+    if (this.broken) return;
+    this.chainBreakTimer = null;
+    // Fragmentos puramente visuais; colisões e duração da quebra permanecem iguais.
+    this.breakParticles = [];
+    for (const rect of this.rectangles()) {
+      for (let i = 0; i < 4; i++) {
+        const seed = Math.abs(Math.sin(rect.x * 1.71 + rect.y * 2.37 + i * 8.13));
+        this.breakParticles.push({
+          x: rect.x + 3 + seed * (rect.width - 6),
+          y: rect.y + 3 + Math.abs(Math.cos(seed * 11 + i)) * (rect.height - 6),
+          vx: (seed - 0.5) * 115,
+          vy: -35 - seed * 95,
+          size: 2 + seed * 2,
+          life: 0.45 + seed * 0.3,
+          maxLife: 0.45 + seed * 0.3,
+          shade: i % 2 === 0 ? "#c99a69" : "#e0b98f"
+        });
+      }
+    }
+    this.active = false; this.broken = true; this.respawnTime = 1.5; this.standTime = 0;
+    if (player.platform === this) { player.platform = null; player.grounded = false; }
+    if (player.wallPlatform === this) { player.wallPlatform = null; player.wallSide = 0; }
+  }
+  update(dt, player) {
+    // Partículas do reaparecimento continuam animadas mesmo depois do bloco voltar.
+    for (const particle of this.respawnParticles) {
+      particle.life -= dt;
+      particle.x += particle.vx * dt;
+      particle.y += particle.vy * dt;
+      particle.vy += 220 * dt;
+    }
+    this.respawnParticles = this.respawnParticles.filter(particle => particle.life > 0);
+
+    if (this.chainBreakTimer !== null && !this.broken) {
+      this.chainBreakTimer -= dt;
+      if (this.chainBreakTimer <= 0) this.breakSingle(player);
+    }
+    if (this.broken) {
+      this.respawnTime -= dt;
+      for (const particle of this.breakParticles) {
+        particle.life -= dt;
+        particle.x += particle.vx * dt;
+        particle.y += particle.vy * dt;
+        particle.vy += 260 * dt;
+      }
+      this.breakParticles = this.breakParticles.filter(particle => particle.life > 0);
+      if (this.respawnTime <= 0) {
+        // Pequena explosão de partículas no instante em que o bloco reaparece.
+        this.respawnParticles = [];
+        for (const rect of this.rectangles()) {
+          for (let i = 0; i < 7; i++) {
+            const seed = Math.abs(Math.sin(rect.x * 2.17 + rect.y * 1.31 + i * 7.73));
+            this.respawnParticles.push({
+              x: rect.x + rect.width / 2,
+              y: rect.y + rect.height / 2,
+              vx: (seed - 0.5) * 105,
+              vy: -35 - seed * 105,
+              size: 1.8 + seed * 2.1,
+              life: 0.34 + seed * 0.18,
+              maxLife: 0.34 + seed * 0.18,
+              shade: i % 2 === 0 ? "#c99a69" : "#e0b98f"
+            });
+          }
+        }
+        this.broken = false; this.active = true; this.standTime = 0;
+      }
+      return;
+    }
+
+    // Um único timer por grupo conectado nos eixos X/Y: atravessar de um tile
+    // para o vizinho não reinicia a contagem.
+    const connected = getConnectedTiles(this, isCrumbleTile)
+      .filter(tile => tile.active && !tile.broken && tile.chainBreakTimer === null);
+    if (!connected.length) return;
+    const leader = connected.reduce((first, tile) =>
+      platforms.indexOf(tile) < platforms.indexOf(first) ? tile : first
+    );
+    if (leader !== this) return;
+
+    const touchingGroup = connected.some(tile =>
+      (player.grounded && player.platform === tile) ||
+      (!player.grounded && player.wallSide !== 0 && player.wallPlatform === tile)
+    );
+    const sharedTime = touchingGroup
+      ? Math.max(...connected.map(tile => tile.standTime)) + dt
+      : 0;
+    for (const tile of connected) tile.standTime = sharedTime;
+    if (sharedTime >= leader.breakDelay) leader.breakNow(player);
+  }
+  draw(context) {
+    if (!this.active) {
+      context.save();
+      // Silhueta marrom translúcida para indicar onde o bloco quebrado vai voltar.
+      const warning = Math.max(0, Math.min(1, (0.45 - this.respawnTime) / 0.45));
+      for (const rect of this.rectangles()) {
+        const shakeX = Math.sin(visualTime * 61 + rect.x * 0.11) * 1.15 * warning;
+        const shakeY = Math.sin(visualTime * 73 + rect.y * 0.09) * 0.7 * warning;
+        context.fillStyle = "rgba(133, 79, 47, 0.30)";
+        context.fillRect(rect.x + shakeX, rect.y + shakeY, rect.width, rect.height);
+
+        // Partículas discretas surgem perto do fim da recarga.
+        if (warning > 0) {
+          for (let i = 0; i < 4; i++) {
+            const seed = Math.abs(Math.sin(rect.x * 0.17 + rect.y * 0.23 + i * 9.1));
+            const phase = (visualTime * (1.6 + seed) + seed * 5 + i * 1.7) % 1;
+            const rise = phase * 8 * warning;
+            context.globalAlpha = warning * (1 - phase) * 0.75;
+            context.fillStyle = i % 2 === 0 ? "#c99a69" : "#e0b98f";
+            context.fillRect(
+              rect.x + 3 + seed * Math.max(1, rect.width - 6) + Math.sin(visualTime * 8 + i) * warning * 2,
+              rect.y + rect.height / 2 - rise,
+              1.5 + seed * 1.2,
+              1.5 + seed * 1.2
+            );
+          }
+        }
+      }
+      // Fragmentos da quebra original continuam caindo à frente da silhueta.
+      for (const particle of this.breakParticles) {
+        context.globalAlpha = Math.max(0, Math.min(1, particle.life / particle.maxLife));
+        context.fillStyle = particle.shade;
+        context.fillRect(particle.x, particle.y, particle.size, particle.size);
+      }
+      context.restore();
+      return;
+    }
+    super.draw(context);
+    // Cada tile já nasce com uma pequena rachadura; ela cresce no contato.
+    {
+      const progress = Math.min(1, this.standTime / this.breakDelay);
+      context.save();
+      context.strokeStyle = `rgba(76, 43, 27, ${0.7 + progress * 0.25})`;
+      context.lineWidth = 2 + progress * 0.35;
+      for (const rect of this.rectangles()) {
+        const cx = rect.x + rect.width * (0.34 + Math.abs(Math.sin(rect.x * 0.21 + rect.y)) * 0.32);
+        const top = rect.y + 2;
+        const bottom = rect.y + rect.height - 2;
+        // Pequena fissura visível desde o início, aumentando com o tempo de contato.
+        const reach = (rect.height - 4) * (0.78 + progress * 0.22);
+        context.beginPath();
+        context.moveTo(cx, top);
+        context.lineTo(cx - 2, top + reach * 0.28);
+        context.lineTo(cx + 2.5, top + reach * 0.52);
+        context.lineTo(cx - 1.5, top + reach * 0.73);
+        context.lineTo(cx, Math.min(bottom, top + reach));
+        if (progress > 0.15) {
+          context.moveTo(cx + 1, top + reach * 0.52);
+          context.lineTo(cx + 5, top + reach * 0.64);
+        }
+        if (progress > 0.55) {
+          context.moveTo(cx - 1.5, top + reach * 0.73);
+          context.lineTo(cx - 5, top + reach * 0.86);
+        }
+        context.stroke();
+      }
+      // A barra só aparece durante o contato, sem mudar a duração da quebra.
+      if (progress > 0) {
+        context.fillStyle = "rgba(255,255,255,.7)";
+        context.fillRect(this.x, this.y - 4, this.width * progress, 2);
+      }
+      context.restore();
+    }
+    if (this.respawnParticles.length) {
+      context.save();
+      for (const particle of this.respawnParticles) {
+        context.globalAlpha = Math.max(0, Math.min(1, particle.life / particle.maxLife));
+        context.fillStyle = particle.shade;
+        context.fillRect(particle.x, particle.y, particle.size, particle.size);
+      }
+      context.restore();
+    }
+  }
+}
+class CrumbleWallPlatform extends CrumblePlatform {
+  constructor(options) {
+    super({ ...options, name: "Parede Quebradiça", isWall: true });
+    this.breakDelay = 1;
+  }
+}
+
+const platforms = [];
+function makeTile(material, x, y, orientation = 0) {
+  const options = { x, y, shape: [[1]], tileSize: 16 };
+  // Orientações de esteira: 0=direita, 1=baixo, 2=esquerda, 3=cima.
+  const o = ((orientation % 4) + 4) % 4;
+  switch (material) {
+    case "normal": case "normalWall": return new NormalPlatform({ ...options, name: "Parede", isWall: true });
+    case "ice": case "iceWall": return new IceWallPlatform(options);
+    case "sticky": case "stickyWall": return new StickyWallPlatform(options);
+    case "bouncy": case "bouncyWall": return new BouncyWallPlatform(options);
+    case "conveyor": case "conveyorWall":
+      return (o % 2 === 0)
+        ? new ConveyorPlatform({ ...options, direction: o === 0 ? 1 : -1 })
+        : new WallConveyorPlatform({ ...options, direction: o === 1 ? 1 : -1 });
+    case "crumble": case "crumbleWall": return new CrumbleWallPlatform(options);
+    default: return new NormalPlatform({ ...options, name: "Parede", isWall: true });
+  }
+}
+function tileKey(x, y) { return `${Math.round(x / 16)},${Math.round(y / 16)}`; }
+function materialFamily(tile) {
+  if (tile instanceof WallConveyorPlatform || tile instanceof ConveyorPlatform) return "conveyor";
+  if (tile instanceof CrumblePlatform) return "crumble";
+  if (tile instanceof IcePlatform) return "ice";
+  if (tile instanceof StickyPlatform) return "sticky";
+  if (tile instanceof BouncyPlatform) return "bouncy";
+  if (tile instanceof NormalPlatform) return "normal";
+  return tile.name;
+}
+function getConnectedTiles(startTile, predicate = tile => materialFamily(tile) === materialFamily(startTile)) {
+  const family = materialFamily(startTile);
+  const byPosition = new Map();
+  for (const tile of platforms) {
+    if (!tile.active && !(tile instanceof CrumblePlatform && tile.chainBreakTimer !== null)) continue;
+    if (materialFamily(tile) !== family || !predicate(tile)) continue;
+    byPosition.set(tileKey(tile.x, tile.y), tile);
+  }
+  const queue = [startTile];
+  const visited = new Set([startTile]);
+  while (queue.length) {
+    const tile = queue.shift();
+    for (const [dx, dy] of [[16,0],[-16,0],[0,16],[0,-16]]) {
+      const next = byPosition.get(tileKey(tile.x + dx, tile.y + dy));
+      if (next && !visited.has(next)) { visited.add(next); queue.push(next); }
+    }
+  }
+  return [...visited];
+}
+function getConnectedTileDistances(startTile, predicate) {
+  const family = materialFamily(startTile);
+  const byPosition = new Map();
+  for (const tile of platforms) {
+    if (materialFamily(tile) === family && predicate(tile)) byPosition.set(tileKey(tile.x, tile.y), tile);
+  }
+  const distances = new Map([[startTile, 0]]);
+  const queue = [startTile];
+  while (queue.length) {
+    const tile = queue.shift();
+    for (const [dx, dy] of [[16,0],[-16,0],[0,16],[0,-16]]) {
+      const next = byPosition.get(tileKey(tile.x + dx, tile.y + dy));
+      if (next && !distances.has(next)) { distances.set(next, distances.get(tile) + 1); queue.push(next); }
+    }
+  }
+  return distances;
+}
+function isCrumbleTile(tile) { return tile instanceof CrumblePlatform; }
+function isConveyorTile(tile) { return tile instanceof ConveyorPlatform; }
+function rotateConveyorComponent(startTile) {
+  const component = getConnectedTiles(startTile, isConveyorTile);
+  const orientationOf = tile => tile instanceof WallConveyorPlatform
+    ? (tile.direction < 0 ? 3 : 1)
+    : (tile.direction < 0 ? 2 : 0);
+  const replacements = component.map(tile => ({
+    old: tile,
+    replacement: makeTile("conveyorWall", tile.x, tile.y, (orientationOf(tile) + 1) % 4)
+  }));
+  for (const { old, replacement } of replacements) {
+    const index = platforms.indexOf(old);
+    if (index >= 0) platforms[index] = replacement;
+  }
+}
+// Cenário inicial mínimo: plataforma normal 3x2 e spawn anchor centralizada acima dela.
+for (let row = 0; row < 2; row++) for (let col = 0; col < 3; col++) {
+  platforms.push(makeTile("normalWall", 464 + col * 16, 400 + row * 16));
+}
+const spawnAnchor = { x: 488, y: 384, size: 16 };
+const spawn = { x: 488, y: 384 };
+
+// Persistência de fases Momentum. JSON é validado como dado estruturado;
+// nenhum conteúdo importado é executado.
+const LEVEL_FORMAT_ID = "momentum-level";
+const LEVEL_FORMAT_VERSION = 1;
+const LOCAL_DRAFT_KEY = "momentum.levelDraft.v1";
+const AUTOSAVE_DELAY_MS = 650;
+const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
+const MAX_LEVEL_TILES = 20000;
+const phaseNameInput = document.querySelector("#phase-name");
+const phaseStatus = document.querySelector("#phase-status");
+const phaseFileInput = document.querySelector("#phase-file-input");
+let autosaveTimer = null;
+let lastSavedSignature = "";
+
+function phaseMessage(message) {
+  phaseStatus.textContent = message;
+}
+function tileMaterialAndOrientation(tile) {
+  if (tile instanceof WallConveyorPlatform) {
+    return { material: "conveyorWall", orientation: tile.direction < 0 ? 3 : 1 };
+  }
+  if (tile instanceof ConveyorPlatform) {
+    return { material: "conveyorWall", orientation: tile.direction < 0 ? 2 : 0 };
+  }
+  if (tile instanceof CrumblePlatform) return { material: "crumbleWall", orientation: 0 };
+  if (tile instanceof StickyWallPlatform) return { material: "stickyWall", orientation: 0 };
+  if (tile instanceof BouncyWallPlatform) return { material: "bouncyWall", orientation: 0 };
+  if (tile instanceof IceWallPlatform) return { material: "iceWall", orientation: 0 };
+  if (tile instanceof NormalPlatform) return { material: "normalWall", orientation: 0 };
+  return null;
+}
+function createLevelDocument() {
+  const tiles = [];
+  for (const tile of platforms) {
+    const type = tileMaterialAndOrientation(tile);
+    if (!type) continue;
+    tiles.push({ x: tile.x, y: tile.y, material: type.material, orientation: type.orientation });
+  }
+  return {
+    format: LEVEL_FORMAT_ID,
+    formatVersion: LEVEL_FORMAT_VERSION,
+    id: "momentum-" + Date.now().toString(36),
+    name: (phaseNameInput.value.trim() || "Minha fase").slice(0, 80),
+    author: "Jogador",
+    world: { width: WORLD.width, height: WORLD.height, gravity: WORLD.gravity, tileSize: 16, voidY: VOID_Y },
+    spawn: { x: spawnAnchor.x, y: spawnAnchor.y },
+    tiles
+  };
+}
+function validateLevelDocument(data) {
+  const fail = message => { throw new Error(message); };
+  if (!data || typeof data !== "object" || Array.isArray(data)) fail("O arquivo não contém um objeto de fase.");
+  if (data.format !== LEVEL_FORMAT_ID) fail("Este JSON não foi identificado como uma fase do Momentum.");
+  if (data.formatVersion !== LEVEL_FORMAT_VERSION) fail("Versão do formato não compatível. Esperada: 1.");
+  if (!data.world || typeof data.world !== "object") fail("Faltam os dados do mundo.");
+  if (data.world.width !== WORLD.width || data.world.height !== WORLD.height ||
+      data.world.gravity !== WORLD.gravity || data.world.tileSize !== 16 || data.world.voidY !== VOID_Y) {
+    fail("As propriedades do mundo não correspondem à versão atual do Momentum.");
+  }
+  if (typeof data.name !== "string" || !data.name.trim() || data.name.length > 80) fail("Nome da fase inválido.");
+  if (!data.spawn || !Number.isInteger(data.spawn.x) || !Number.isInteger(data.spawn.y) ||
+      data.spawn.x < 0 || data.spawn.y < 0 || data.spawn.x % 16 !== 0 || data.spawn.y % 16 !== 0 ||
+      data.spawn.x >= WORLD.width || data.spawn.y >= VOID_Y - 16) fail("Posição inicial inválida.");
+  if (!Array.isArray(data.tiles)) fail("A lista de blocos está ausente ou inválida.");
+  if (data.tiles.length > MAX_LEVEL_TILES) fail("A fase ultrapassa o limite de blocos permitido.");
+  const materials = new Set(["normalWall", "iceWall", "stickyWall", "bouncyWall", "conveyorWall", "crumbleWall"]);
+  const occupied = new Set();
+  for (const tile of data.tiles) {
+    if (!tile || typeof tile !== "object" || Array.isArray(tile)) fail("Foi encontrado um bloco inválido.");
+    if (!Number.isInteger(tile.x) || !Number.isInteger(tile.y) || tile.x % 16 !== 0 || tile.y % 16 !== 0 ||
+        tile.x < 0 || tile.y < 0 || tile.x >= WORLD.width || tile.y >= VOID_Y - 16) {
+      fail("Um bloco está fora dos limites ou desalinhado na grade.");
+    }
+    if (!materials.has(tile.material)) fail("A fase contém um material desconhecido.");
+    if (!Number.isInteger(tile.orientation) || tile.orientation < 0 || tile.orientation > 3) {
+      fail("Orientação de bloco inválida.");
+    }
+    if (tile.material !== "conveyorWall" && tile.orientation !== 0) fail("Orientação inválida para este material.");
+    const key = `${tile.x},${tile.y}`;
+    if (occupied.has(key)) fail("A fase contém mais de um bloco na mesma posição.");
+    occupied.add(key);
+  }
+  return true;
+}
+function levelSignature(level) {
+  return JSON.stringify({
+    name: level.name, world: level.world, spawn: level.spawn,
+    tiles: level.tiles.slice().sort((a, b) => a.y - b.y || a.x - b.x || a.material.localeCompare(b.material))
+  });
+}
+function writeLocalDraft(showMessage = true) {
+  try {
+    const level = createLevelDocument();
+    validateLevelDocument(level);
+    localStorage.setItem(LOCAL_DRAFT_KEY, JSON.stringify(level));
+    lastSavedSignature = levelSignature(level);
+    if (showMessage) phaseMessage("Salvo neste navegador.");
+    return true;
+  } catch (error) {
+    if (showMessage) phaseMessage("Não foi possível salvar localmente: " + error.message);
+    return false;
+  }
+}
+function scheduleAutosave() {
+  if (autosaveTimer !== null) clearTimeout(autosaveTimer);
+  phaseMessage("Alterações pendentes…");
+  autosaveTimer = setTimeout(() => {
+    autosaveTimer = null;
+    const level = createLevelDocument();
+    if (levelSignature(level) === lastSavedSignature) {
+      phaseMessage("Fase já está salva neste navegador.");
+      return;
+    }
+    writeLocalDraft(true);
+  }, AUTOSAVE_DELAY_MS);
+}
+function applyLevelDocument(level) {
+  // Só é chamada depois da validação completa do documento.
+  const replacementTiles = level.tiles.map(tile =>
+    makeTile(tile.material, tile.x, tile.y, tile.orientation)
+  );
+  platforms.splice(0, platforms.length, ...replacementTiles);
+  spawnAnchor.x = level.spawn.x;
+  spawnAnchor.y = level.spawn.y;
+  spawn.x = level.spawn.x;
+  spawn.y = level.spawn.y;
+  phaseNameInput.value = level.name;
+  resetPlayer();
+  lastSavedSignature = levelSignature(level);
+}
+function savePhaseNow() {
+  if (autosaveTimer !== null) clearTimeout(autosaveTimer);
+  autosaveTimer = null;
+  writeLocalDraft(true);
+}
+function exportPhaseJSON() {
+  try {
+    const level = createLevelDocument();
+    validateLevelDocument(level);
+    const blob = new Blob([JSON.stringify(level, null, 2)], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    const safeName = level.name.normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9_-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 60) || "fase_momentum";
+    anchor.href = url;
+    anchor.download = `${safeName}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    phaseMessage("JSON exportado. Você pode compartilhar esse arquivo.");
+  } catch (error) {
+    phaseMessage("Falha ao exportar: " + error.message);
+  }
+}
+async function importPhaseFile(file) {
+  if (!file) return;
+  try {
+    if (file.size > MAX_IMPORT_BYTES) throw new Error("O arquivo é grande demais (limite de 2 MB).");
+    const raw = await file.text();
+    let level;
+    try { level = JSON.parse(raw); }
+    catch (_) { throw new Error("O arquivo não contém JSON válido."); }
+    validateLevelDocument(level);
+    // A fase atual só é substituída após todas as verificações passarem.
+    applyLevelDocument(level);
+    if (writeLocalDraft(false)) phaseMessage(`Fase “${level.name}” importada e salva neste navegador.`);
+    else phaseMessage(`Fase “${level.name}” importada, mas o salvamento local falhou.`);
+  } catch (error) {
+    phaseMessage("Importação recusada: " + error.message);
+  } finally {
+    phaseFileInput.value = "";
+  }
+}
+document.querySelector("#save-phase").addEventListener("click", savePhaseNow);
+document.querySelector("#export-phase").addEventListener("click", exportPhaseJSON);
+document.querySelector("#import-phase").addEventListener("click", () => phaseFileInput.click());
+phaseFileInput.addEventListener("change", () => importPhaseFile(phaseFileInput.files && phaseFileInput.files[0]));
+phaseNameInput.addEventListener("input", scheduleAutosave);
+window.addEventListener("beforeunload", () => {
+  if (autosaveTimer !== null) clearTimeout(autosaveTimer);
+  const level = createLevelDocument();
+  if (levelSignature(level) !== lastSavedSignature) writeLocalDraft(false);
+});
+// Recupera o rascunho após a inicialização completa do jogador e da física.
+setTimeout(() => {
+  try {
+    const savedDraft = localStorage.getItem(LOCAL_DRAFT_KEY);
+    if (savedDraft) {
+      const parsedDraft = JSON.parse(savedDraft);
+      validateLevelDocument(parsedDraft);
+      applyLevelDocument(parsedDraft);
+      phaseMessage(`Rascunho “${parsedDraft.name}” recuperado automaticamente.`);
+    }
+  } catch (error) {
+    phaseMessage("O rascunho local foi ignorado por estar inválido ou indisponível.");
+  }
+}, 0);
+
+const player = {
+  x: spawn.x, y: spawn.y, width: 16, height: 16, vx: 0, vy: 0,
+  maxSpeed: 250, acceleration: 1750, airAcceleration: 1000,
+  friction: 10, jumpSpeed: 480, grounded: false, platform: null,
+  impactSpeed: 0, bounceLock: 0, squash: 1, jumpHoldActive: false,
+  jumpBufferTimer: 0, jumpReleaseGrace: 0, coyoteTimer: 0, coyotePlatform: null, wallSide: 0, wallPlatform: null,
+  wallJumpLock: 0, wallJumpDirection: 0, stickyWallBounceSide: 0,
+  ceilingStickyTimer: 0, ceilingStickyPlatform: null, ceilingConveyorPlatform: null
+};
+function resetPlayer() {
+  Object.assign(player, {
+    x: spawn.x, y: spawn.y, vx: 0, vy: 0, grounded: false,
+    platform: null, impactSpeed: 0, bounceLock: 0, squash: 1,
+    jumpHoldActive: false, jumpBufferTimer: 0, jumpReleaseGrace: 0, coyoteTimer: 0, coyotePlatform: null, wallSide: 0, wallPlatform: null,
+    wallJumpLock: 0, wallJumpDirection: 0, stickyWallBounceSide: 0,
+    ceilingStickyTimer: 0, ceilingStickyPlatform: null, ceilingConveyorPlatform: null
+  });
+  cameraX = 0; cameraY = 0;
+}
+
+function currentPlatform() {
+  return player.grounded && player.platform?.active ? player.platform : null;
+}
+
+function movePlayer(dt) {
+  const left = isDown("ArrowLeft", "KeyA");
+  const right = isDown("ArrowRight", "KeyD");
+  const jumpPressed = wasPressed("Space", "ArrowUp", "KeyW");
+  const jumpHeld = isDown("Space", "ArrowUp", "KeyW");
+  const wallSlideHeld = isDown("ArrowDown", "KeyS");
+  if (jumpPressed) player.jumpBufferTimer = 0.12;
+  const support = currentPlatform();
+  const sticky = support instanceof StickyPlatform;
+  const jumpSupport = support || (player.coyoteTimer > 0 ? player.coyotePlatform : null);
+  const jumpSticky = jumpSupport instanceof StickyPlatform;
+
+  // A aderência inferior pode migrar entre tiles grudentos adjacentes.
+  // A sobreposição real é conferida depois do movimento horizontal deste quadro.
+  if (player.ceilingStickyPlatform && (player.grounded || player.ceilingStickyTimer <= 0)) {
+    player.ceilingStickyTimer = 0;
+    player.ceilingStickyPlatform = null;
+  }
+
+  // Pressionar para baixo/S solta imediatamente a esteira pelo lado inferior.
+  const releaseCeilingConveyor = !!player.ceilingConveyorPlatform && wallSlideHeld;
+  if (releaseCeilingConveyor) {
+    player.ceilingConveyorPlatform = null;
+    player.vy = Math.max(player.vy, 90);
+  }
+
+  // Uma esteira horizontal pode sustentar o jogador pela face inferior.
+  // A cada passo, escolhemos o tile que contém o centro do jogador para que
+  // a transição para uma esteira adjacente (inclusive com outro sentido) seja contínua.
+  let ceilingConveyor = null;
+  if (player.ceilingConveyorPlatform && !releaseCeilingConveyor) {
+    const previousCeiling = player.ceilingConveyorPlatform;
+    const stillAtCeiling = previousCeiling.active &&
+      !(previousCeiling instanceof WallConveyorPlatform) &&
+      Math.abs(player.y - (previousCeiling.y + previousCeiling.height)) < 1.25;
+    if (stillAtCeiling && !player.grounded) {
+      const centerX = player.x + player.width / 2;
+      ceilingConveyor = platforms.find(platform => platform.active &&
+        platform instanceof ConveyorPlatform && !(platform instanceof WallConveyorPlatform) &&
+        Math.abs(player.y - (platform.y + platform.height)) < 1.25 &&
+        centerX >= platform.x && centerX < platform.x + platform.width) || null;
+      // Ao entrar/sair pela borda, mantenha o contato enquanto ainda houver
+      // sobreposição horizontal; isso evita perder a esteira por um único frame.
+      if (!ceilingConveyor) {
+        ceilingConveyor = platforms.find(platform => platform.active &&
+          platform instanceof ConveyorPlatform && !(platform instanceof WallConveyorPlatform) &&
+          Math.abs(player.y - (platform.y + platform.height)) < 1.25 &&
+          player.x < platform.x + platform.width && player.x + player.width > platform.x) || null;
+      }
+      if (!ceilingConveyor) player.vy = Math.max(player.vy, 45);
+    }
+  }
+  player.ceilingConveyorPlatform = ceilingConveyor;
+  if (ceilingConveyor) {
+    player.ceilingStickyTimer = 0;
+    player.ceilingStickyPlatform = null;
+  }
+  const ceilingStickyActive = player.ceilingStickyTimer > 0 && !!player.ceilingStickyPlatform && !ceilingConveyor;
+
+  const speedMultiplier = sticky ? support.movementMultiplier : (ceilingStickyActive ? 0.48 : 1);
+  const acceleration = player.grounded ? player.acceleration : player.airAcceleration;
+
+  const stickyBounceAwayInput = player.stickyWallBounceSide !== 0 &&
+    ((player.stickyWallBounceSide === 1 && left && !right) || (player.stickyWallBounceSide === -1 && right && !left));
+  if (left !== right && !stickyBounceAwayInput) {
+    player.vx += (right ? 1 : -1) * acceleration * speedMultiplier * dt;
+    player.vx = Math.max(-player.maxSpeed * speedMultiplier, Math.min(player.maxSpeed * speedMultiplier, player.vx));
+  } else {
+    const friction = player.grounded
+      ? (support instanceof IcePlatform ? 0.22 : (sticky ? 15 : 10))
+      : 1.3;
+    player.vx *= Math.max(0, 1 - friction * dt);
+    if (Math.abs(player.vx) < 3) player.vx = 0;
+  }
+
+  // A aderência inferior precisa limitar também a velocidade já acumulada:
+  // reduzir apenas a aceleração deixava o jogador sair do tile no quadro seguinte.
+  if (ceilingStickyActive) {
+    const stickyCeilingMaxSpeed = player.maxSpeed * 0.48;
+    player.vx = Math.max(-stickyCeilingMaxSpeed, Math.min(stickyCeilingMaxSpeed, player.vx));
+  }
+
+  // O deslocamento da esteira entra na resolução horizontal de colisões,
+  // inclusive quando a velocidade própria do jogador é zero.
+  const conveyorDisplacementX = support instanceof ConveyorPlatform && !(support instanceof WallConveyorPlatform)
+    ? support.conveyorSpeed * support.direction * dt
+    : 0;
+  const ceilingConveyorDisplacementX = ceilingConveyor
+    ? ceilingConveyor.conveyorSpeed * ceilingConveyor.direction * dt
+    : 0;
+
+  if (player.jumpBufferTimer > 0 && (player.grounded || player.coyoteTimer > 0) && player.bounceLock <= 0) {
+    // Buffer curto: aceita um toque pouco antes do pouso sem alterar a física do salto.
+    // Velocidade inicial calibrada para a altura atual do pulo.
+    player.vy = -Math.floor(player.jumpSpeed * (jumpSticky ? jumpSupport.jumpMultiplier : 1));
+    player.grounded = false;
+    player.platform = null;
+    player.coyoteTimer = 0;
+    player.coyotePlatform = null;
+    player.jumpHoldActive = true;
+    player.jumpReleaseGrace = 0.05;
+    player.jumpBufferTimer = 0;
+  }
+
+  // Ao soltar o botão, preserva parte do impulso para uma transição suave,
+  // mantendo o pulo variável sem interromper abruptamente a subida.
+  if (player.jumpHoldActive && !jumpHeld && player.vy < 0 && player.jumpReleaseGrace <= 0) {
+    player.vy *= 0.4;
+    player.jumpHoldActive = false;
+  }
+  if (player.vy >= 0) player.jumpHoldActive = false;
+
+  player.bounceLock = Math.max(0, player.bounceLock - dt);
+  player.jumpBufferTimer = Math.max(0, player.jumpBufferTimer - dt);
+  player.jumpReleaseGrace = Math.max(0, player.jumpReleaseGrace - dt);
+
+  // Wall jump: usa o mesmo botão de pulo e lança o jogador para longe da parede.
+  if (jumpPressed && !player.grounded && player.wallSide !== 0 && player.bounceLock <= 0) {
+    const stickyWall = player.wallPlatform instanceof StickyWallPlatform;
+    const awayDirection = player.wallSide === -1 ? 1 : -1;
+    // Na parede grudenta, segurar para longe da parede cancela o wall bounce.
+    const holdingAway = stickyWall && ((awayDirection < 0 && left && !right) || (awayDirection > 0 && right && !left));
+    if (!holdingAway) {
+      player.wallJumpDirection = awayDirection;
+      if (stickyWall) player.stickyWallBounceSide = player.wallSide;
+      // Paredes grudentas quase não impulsionam para longe e não recebem proteção do impulso.
+      player.vx = player.wallJumpDirection * (stickyWall ? 72 : 250);
+      player.vy = stickyWall ? -350 : -400;
+      // Paredes grudentas não têm lock; as demais preservam a proteção já calibrada.
+      player.wallJumpLock = stickyWall ? 0 : 0.42;
+      player.wallSide = 0;
+      player.jumpBufferTimer = 0;
+      player.jumpHoldActive = true;
+      player.jumpReleaseGrace = 0.05;
+    }
+  }
+
+  // Protege o impulso inicial do wall jump, mas reduz essa proteção
+  // gradualmente para que o jogador possa corrigir a trajetória no ar.
+  if (player.wallJumpLock > 0) {
+    player.wallJumpLock = Math.max(0, player.wallJumpLock - dt);
+    const lockDuration = 0.42;
+    const lockProgress = player.wallJumpLock / lockDuration;
+    const minimumOutwardSpeed = 250 * lockProgress;
+    if (player.wallJumpDirection !== 0) {
+      const outwardSpeed = player.vx * player.wallJumpDirection;
+      if (outwardSpeed < minimumOutwardSpeed) {
+        player.vx = player.wallJumpDirection * minimumOutwardSpeed;
+      }
+    }
+    if (player.wallJumpLock === 0) player.wallJumpDirection = 0;
+  }
+
+  // X e Y são resolvidos separadamente para colisões previsíveis.
+  player.wallSide = 0;
+  player.wallPlatform = null;
+  const previousX = player.x;
+  const horizontalDisplacement = player.vx * dt + conveyorDisplacementX + ceilingConveyorDisplacementX;
+  player.x += horizontalDisplacement;
+  for (const platform of platforms) {
+    if (!platform.active) continue;
+    for (const rect of platform.rectangles()) {
+      if (player.x < rect.x + rect.width && player.x + player.width > rect.x &&
+          player.y < rect.y + rect.height && player.y + player.height > rect.y) {
+        if (horizontalDisplacement > 0) {
+          player.x = rect.x - player.width;
+          if (platform.isWall) { player.wallSide = 1; player.wallPlatform = platform; }
+        } else if (horizontalDisplacement < 0) {
+          player.x = rect.x + rect.width;
+          if (platform.isWall) { player.wallSide = -1; player.wallPlatform = platform; }
+        }
+        player.vx = 0;
+      }
+    }
+  }
+
+  // Mantém o contato lateral mesmo com velocidade horizontal zerada.
+  // Também detecta contato enquanto apoiado numa plataforma: isso permite
+  // transferir o jogador da esteira horizontal para a esteira vertical na quina.
+  for (const platform of platforms) {
+    if (!platform.active || !platform.isWall) continue;
+    // Em estado apoiado, só a esteira vertical precisa antecipar o contato
+    // para permitir a transferência entre orientações; as outras paredes
+    // mantêm o comportamento anterior.
+    if (player.grounded && !(platform instanceof WallConveyorPlatform)) continue;
+    for (const rect of platform.rectangles()) {
+      const verticalOverlap = player.y < rect.y + rect.height && player.y + player.height > rect.y;
+      if (!verticalOverlap) continue;
+      if (Math.abs(player.x + player.width - rect.x) < 1.1) { player.wallSide = 1; player.wallPlatform = platform; }
+      else if (Math.abs(player.x - (rect.x + rect.width)) < 1.1) { player.wallSide = -1; player.wallPlatform = platform; }
+    }
+  }
+
+  // A parede elástica dispara um wall bounce automático ao primeiro contato lateral no ar.
+  // O impulso é independente do botão de pulo e reaproveita a proteção do wall jump existente.
+  if (!player.grounded && player.wallSide !== 0 && player.wallPlatform instanceof BouncyWallPlatform) {
+    const awayDirection = player.wallSide === -1 ? 1 : -1;
+    player.vx = awayDirection * 250;
+    player.vy = -400;
+    player.wallJumpDirection = awayDirection;
+    player.wallJumpLock = 0.42;
+    player.bounceLock = 0.12;
+    player.jumpBufferTimer = 0;
+    player.jumpHoldActive = false;
+    player.jumpReleaseGrace = 0;
+    player.wallSide = 0;
+    player.wallPlatform = null;
+  }
+
+  // Atualiza a aderência grudenta após o deslocamento horizontal: ao atravessar
+  // tiles adjacentes, a referência passa para o tile que ainda sustenta o jogador.
+  if (player.ceilingStickyPlatform && player.ceilingStickyTimer > 0) {
+    let stickyContact = null;
+    for (const platform of platforms) {
+      if (!platform.active || !(platform instanceof StickyPlatform)) continue;
+      for (const rect of platform.rectangles()) {
+        const touchesCeiling = Math.abs(player.y - (rect.y + rect.height)) < 1.25;
+        const overlapsX = player.x < rect.x + rect.width && player.x + player.width > rect.x;
+        if (touchesCeiling && overlapsX) { stickyContact = { platform, rect }; break; }
+      }
+      if (stickyContact) break;
+    }
+    if (stickyContact) {
+      player.ceilingStickyPlatform = stickyContact.platform;
+      player.y = stickyContact.rect.y + stickyContact.rect.height;
+    } else {
+      player.ceilingStickyTimer = 0;
+      player.ceilingStickyPlatform = null;
+    }
+  }
+
+  const previousTop = player.y;
+  const previousBottom = player.y + player.height;
+  const wasGroundedBeforeWallTransport = player.grounded;
+  // A parede esteira pode assumir o transporte mesmo se o jogador estava
+  // apoiado na esteira horizontal no início deste passo físico.
+  player.grounded = false;
+  player.platform = null;
+  const wallConveyor = player.wallSide !== 0 && player.wallPlatform instanceof WallConveyorPlatform
+    ? player.wallPlatform : null;
+  if (wallSlideHeld && !wasGroundedBeforeWallTransport && player.wallSide !== 0 && player.wallPlatform) {
+    // Segurar baixo/S acelera o wall slide; no gelo, o impulso é ainda mais rápido.
+    // As demais paredes preservam o comportamento manual já existente.
+    player.vy = player.wallPlatform instanceof IceWallPlatform ? 360 : 180;
+    player.impactSpeed = player.vy;
+    player.y += player.vy * dt;
+  } else if (wallConveyor) {
+    // Ao agarrar-se, a gravidade é suspensa e a parede transporta o jogador verticalmente.
+    const nextY = player.y + wallConveyor.direction * wallConveyor.conveyorSpeed * dt;
+    const wallTop = wallConveyor.y;
+    const wallBottom = wallConveyor.y + wallConveyor.height;
+    const hasContinuation = platforms.some(platform => {
+      if (!platform.active || !(platform instanceof WallConveyorPlatform) || platform.direction !== wallConveyor.direction) return false;
+      const sameColumn = Math.abs(platform.x - wallConveyor.x) < 1;
+      const continuesUp = wallConveyor.direction < 0 && Math.abs(platform.y + platform.height - wallTop) < 1;
+      const continuesDown = wallConveyor.direction > 0 && Math.abs(platform.y - wallBottom) < 1;
+      return sameColumn && (continuesUp || continuesDown);
+    });
+    if (wallConveyor.direction < 0 && nextY + player.height <= wallTop && !hasContinuation) {
+      player.y = wallTop - player.height;
+      player.vy = -220; // pequeno impulso ao sair pela extremidade superior
+      player.wallSide = 0; player.wallPlatform = null;
+    } else if (wallConveyor.direction > 0 && nextY >= wallBottom && !hasContinuation) {
+      player.y = wallBottom;
+      player.vy = 220; // pequeno impulso ao sair pela extremidade inferior
+      player.wallSide = 0; player.wallPlatform = null;
+    } else {
+      player.y = nextY;
+      player.vy = 0;
+    }
+  } else if (ceilingConveyor) {
+    // A face inferior da esteira sustenta o jogador enquanto ela o transporta.
+    player.y = ceilingConveyor.y + ceilingConveyor.height;
+    player.vy = 0;
+    player.impactSpeed = 0;
+  } else if (ceilingStickyActive) {
+    // A lama segura o jogador sem qualquer escorregão vertical por até 1,5 s.
+    player.ceilingStickyTimer = Math.max(0, player.ceilingStickyTimer - dt);
+    if (player.ceilingStickyTimer > 0 && player.ceilingStickyPlatform?.active) {
+      const contactRect = player.ceilingStickyPlatform.rectangles().find(rect =>
+        Math.abs(player.y - (rect.y + rect.height)) < 1.25 &&
+        player.x < rect.x + rect.width && player.x + player.width > rect.x
+      );
+      if (contactRect) {
+        player.y = contactRect.y + contactRect.height;
+        player.vy = 0;
+        player.impactSpeed = 0;
+      } else {
+        player.ceilingStickyTimer = 0;
+        player.ceilingStickyPlatform = null;
+        player.vy += WORLD.gravity * dt;
+        player.impactSpeed = player.vy;
+        player.y += player.vy * dt;
+      }
+    } else {
+      player.ceilingStickyPlatform = null;
+      player.vy += WORLD.gravity * dt;
+      player.impactSpeed = player.vy;
+      player.y += player.vy * dt;
+    }
+  } else {
+    player.vy += WORLD.gravity * dt;
+    const wallSlideSpeed = player.wallPlatform instanceof IceWallPlatform ? 260
+      : (player.wallPlatform instanceof StickyWallPlatform ? 32 : 95);
+    if (!player.grounded && player.wallSide !== 0 && player.vy > 0) player.vy = Math.min(player.vy, wallSlideSpeed);
+    player.impactSpeed = player.vy;
+    player.y += player.vy * dt;
+  }
+  // A direção real do deslocamento também cobre o transporte da esteira vertical,
+  // que pode mover o jogador mesmo com vy igual a zero.
+  const verticalDisplacement = player.y - previousTop;
+  const verticalImpactVelocity = player.vy;
+
+  player.grounded = false;
+  player.platform = null;
+  if (player.grounded || player.wallSide !== 0) player.stickyWallBounceSide = 0;
+  let undersideCollisionHandled = false;
+
+  // Colisão vertical nos dois sentidos:
+  // - caindo: a parte inferior do jogador cruza o topo da plataforma;
+  // - subindo: a parte superior do jogador cruza a parte inferior da plataforma.
+  for (const platform of platforms) {
+    if (!platform.active) continue;
+    for (const rect of platform.rectangles()) {
+      const overlapsX = player.x < rect.x + rect.width && player.x + player.width > rect.x;
+      const sweptOverlapsX = Math.min(previousX, player.x) < rect.x + rect.width &&
+        Math.max(previousX, player.x) + player.width > rect.x;
+      const currentTop = player.y;
+      const currentBottom = player.y + player.height;
+
+      if (overlapsX && verticalDisplacement >= 0 &&
+          previousBottom <= rect.y && currentBottom >= rect.y) {
+        // Aterrissagem na superfície superior.
+        player.y = rect.y - player.height;
+        player.vy = 0;
+        player.grounded = true;
+        player.platform = platform;
+        player.ceilingStickyTimer = 0;
+        player.ceilingStickyPlatform = null;
+        player.ceilingConveyorPlatform = null;
+        platform.onLand(player);
+        break;
+      }
+
+      if ((overlapsX || sweptOverlapsX) && verticalDisplacement < 0 &&
+          previousTop >= rect.y + rect.height && currentTop <= rect.y + rect.height) {
+        // A colisão inferior responde de acordo com o material atingido.
+        player.y = rect.y + rect.height;
+        undersideCollisionHandled = true;
+        if (platform instanceof CrumblePlatform) {
+          // Primeiro encerra o movimento ascendente no contato; só então quebra o tile.
+          player.vy = 0;
+          player.impactSpeed = 0;
+          player.jumpHoldActive = false;
+          platform.breakNow(player);
+          player.ceilingStickyTimer = 0;
+          player.ceilingStickyPlatform = null;
+          player.ceilingConveyorPlatform = null;
+        } else if (platform instanceof BouncyPlatform) {
+          // A face inferior devolve o impulso na direção oposta: para baixo.
+          player.vy = Math.max(490, Math.min(760, Math.abs(verticalImpactVelocity) * 0.82));
+          player.grounded = false;
+          player.platform = null;
+          player.jumpHoldActive = false;
+          player.jumpReleaseGrace = 0;
+          player.bounceLock = 0.12;
+          player.squash = 1.28;
+          platform.compression = 1;
+          player.ceilingStickyTimer = 0;
+          player.ceilingStickyPlatform = null;
+          player.ceilingConveyorPlatform = null;
+        } else if (platform instanceof StickyPlatform) {
+          // Agarra na face inferior por 1,5 s, sem deslocamento vertical.
+          // Em impacto lateral muito rápido, mantém uma pequena sobreposição no tile.
+          if (!overlapsX) {
+            player.x = horizontalDisplacement >= 0
+              ? rect.x + rect.width - player.width
+              : rect.x;
+          }
+          player.vy = 0;
+          // Freia imediatamente a velocidade herdada do salto/impulso, para
+          // que o jogador não atravesse a borda antes do próximo quadro físico.
+          const stickyCeilingMaxSpeed = player.maxSpeed * 0.48;
+          player.vx = Math.max(-stickyCeilingMaxSpeed, Math.min(stickyCeilingMaxSpeed, player.vx));
+          player.ceilingStickyTimer = 1.5;
+          player.ceilingStickyPlatform = platform;
+          player.ceilingConveyorPlatform = null;
+        } else if (platform instanceof ConveyorPlatform && !(platform instanceof WallConveyorPlatform)) {
+          // O jogador se agarra à parte inferior da esteira horizontal.
+          player.vy = 0;
+          player.ceilingStickyTimer = 0;
+          player.ceilingStickyPlatform = null;
+          player.ceilingConveyorPlatform = platform;
+        } else {
+          // Tiles normais, gelo e esteiras verticais mantêm a colisão inferior padrão.
+          player.vy = 0;
+          player.ceilingStickyTimer = 0;
+          player.ceilingStickyPlatform = null;
+          player.ceilingConveyorPlatform = null;
+        }
+        break;
+      }
+    }
+    if (player.grounded || undersideCollisionHandled) break;
+  }
+
+  // Coyote time: mantém a permissão de pulo por 0,1 s após sair da plataforma.
+  if (player.grounded) {
+    player.coyoteTimer = 0.1;
+    player.coyotePlatform = player.platform;
+  } else {
+    player.coyoteTimer = Math.max(0, player.coyoteTimer - dt);
+    if (player.coyoteTimer === 0) player.coyotePlatform = null;
+  }
+
+  // Limites e queda para fora do cenário.
+  player.x = Math.max(0, Math.min(WORLD.width - player.width, player.x));
+  if (player.y + player.height >= VOID_Y) resetPlayer();
+}
+
+const backgroundCanvas = document.createElement("canvas");
+const backgroundCtx = backgroundCanvas.getContext("2d");
+
+function drawBackground(context) {
+  context.fillStyle = "#202832";
+  context.fillRect(0, 0, WORLD.width, WORLD.height);
+  context.strokeStyle = "rgba(173, 190, 208, .055)";
+  context.lineWidth = 1;
+  for (let x = 0; x <= WORLD.width; x += 32) {
+    context.beginPath(); context.moveTo(x + .5, 0); context.lineTo(x + .5, WORLD.height); context.stroke();
+  }
+  for (let y = 0; y <= WORLD.height; y += 32) {
+    context.beginPath(); context.moveTo(0, y + .5); context.lineTo(WORLD.width, y + .5); context.stroke();
+  }
+  // Fundo neutro do editor; os materiais são mostrados apenas pelos tiles reais.
+  context.strokeStyle = "rgba(173, 190, 208, .12)";
+  context.lineWidth = 1;
+  context.beginPath(); context.moveTo(0, VOID_Y + .5); context.lineTo(WORLD.width, VOID_Y + .5); context.stroke();
+  context.fillStyle = "#ff424f";
+  context.font = "bold 14px system-ui, sans-serif";
+  context.fillText("VOID", 18, VOID_Y - 8);
+}
+function resizeBackgroundCache() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  backgroundCanvas.width = Math.round(WORLD.width * dpr);
+  backgroundCanvas.height = Math.round(WORLD.height * dpr);
+  backgroundCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawBackground(backgroundCtx);
+}
+resizeBackgroundCache();
+window.addEventListener("resize", resizeBackgroundCache);
+
+function drawPlayer() {
+  ctx.save();
+  const centerX = player.x + player.width / 2;
+  const bottom = player.y + player.height;
+  // O tremor começa após 50% do tempo total de aderência; não altera a física.
+  const stickyWarningThreshold = 0.5;
+  const stickyWarning = player.ceilingStickyTimer > 0 && player.ceilingStickyPlatform?.active
+    ? Math.max(0, Math.min(1, (stickyWarningThreshold - player.ceilingStickyTimer / 1.5) / stickyWarningThreshold))
+    : 0;
+  const shake = stickyWarning * stickyWarning;
+  const shakeX = Math.sin(visualTime * 74) * 1.15 * shake;
+  const shakeY = Math.sin(visualTime * 91 + 0.8) * 0.65 * shake;
+  ctx.translate(centerX + shakeX, bottom + shakeY);
+  ctx.scale(1, player.squash);
+  ctx.fillStyle = "#f4f6fa";
+  ctx.fillRect(-player.width / 2, -player.height, player.width, player.height);
+  ctx.restore();
+  player.squash += (1 - player.squash) * 0.18;
+}
+
+function drawStickyContactParticles(context) {
+  // Efeito puramente visual: partículas maiores cobrem toda a faixa de contato.
+  // As posições derivam do jogador a cada quadro, acompanhando seus movimentos.
+  let edge = null;
+  if (player.grounded && player.platform instanceof StickyPlatform && player.platform.active) {
+    edge = { type: "floor", x: player.x, y: player.y + player.height };
+  } else if (!player.grounded && player.wallSide !== 0 &&
+             player.wallPlatform instanceof StickyWallPlatform && player.wallPlatform.active) {
+    edge = {
+      type: "wall",
+      x: player.wallSide === 1 ? player.x + player.width : player.x,
+      y: player.y
+    };
+  } else if (player.ceilingStickyTimer > 0 && player.ceilingStickyPlatform?.active) {
+    edge = { type: "ceiling", x: player.x, y: player.y };
+  }
+  if (!edge) return;
+
+  context.save();
+  // A intensidade aumenta após 50% do tempo total de aderência.
+  const stickyWarningThreshold = 0.5;
+  const stickyWarning = edge.type === "ceiling"
+    ? Math.max(0, Math.min(1, (stickyWarningThreshold - player.ceilingStickyTimer / 1.5) / stickyWarningThreshold))
+    : 0;
+  const count = 12 + Math.round(stickyWarning * 6);
+  for (let i = 0; i < count; i++) {
+    const seed = Math.abs(Math.sin(i * 12.73 + (edge.type === "floor" ? 2.4 : edge.type === "ceiling" ? 4.8 : 7.1)));
+    const pulse = 0.5 + 0.5 * Math.sin(visualTime * (2.4 + seed + stickyWarning * 7) + i * 1.7);
+    const size = 3.6 + seed * 2.0 + pulse * 1.4 + stickyWarning * (0.8 + pulse * 1.2);
+    // Distribuição uniforme para cobrir a largura dos pés ou toda a lateral do corpo.
+    const along = ((i + 0.5) / count) * (edge.type === "wall" ? player.height : player.width);
+    const offset = (seed - 0.5) * 3.2;
+    const px = edge.type === "wall" ? edge.x + offset : edge.x + along;
+    const py = edge.type === "wall" ? edge.y + along : (edge.type === "floor" || edge.type === "ceiling" ? edge.y + offset : edge.y + along);
+
+    context.globalAlpha = Math.min(1, 0.5 + pulse * 0.36 + stickyWarning * 0.18);
+    context.fillStyle = i % 3 === 0 ? "#4b2b20" : "#603925";
+    context.fillRect(px - size / 2, py - size / 2, size, size);
+    context.globalAlpha = 0.22 + pulse * 0.2;
+    context.fillStyle = "#d49a70";
+    context.fillRect(px - size * 0.22, py - size * 0.22,
+      Math.max(0.8, size * 0.28), Math.max(0.8, size * 0.28));
+  }
+  context.restore();
+}
+
+function updateHud() {
+  const support = currentPlatform();
+  statusEl.textContent = `Material: ${support ? support.name : "nenhum"}`;
+  velocityEl.textContent = `Velocidade: X ${player.vx.toFixed(1)} · Y ${player.vy.toFixed(1)}`;
+}
+
+// Editor v2.4: histórico, seleção, ferramentas de área, zoom e prévia.
+const modeToggle = document.querySelector("#mode-toggle");
+const toolButtons = [...document.querySelectorAll("#editor-tools [data-tool]")];
+const materialButtons = [...document.querySelectorAll("[data-material]")];
+const undoButton = document.querySelector("#undo-action");
+const redoButton = document.querySelector("#redo-action");
+const duplicateButton = document.querySelector("#duplicate-selection");
+const applyMaterialButton = document.querySelector("#apply-material-selection");
+const zoomOutButton = document.querySelector("#zoom-out");
+const zoomInButton = document.querySelector("#zoom-in");
+const zoomResetButton = document.querySelector("#zoom-reset");
+const HISTORY_LIMIT = 50;
+let undoStack = [], redoStack = [];
+let selection = new Set();
+let clipboardTiles = [];
+let previewWorld = null;
+let gestureBefore = null;
+let touchPoints = new Map();
+let pinchState = null;
+let selectionDrag = null;
+
+function setTool(tool) {
+  activeTool = tool;
+  toolButtons.forEach(button => button.classList.toggle("selected", button.dataset.tool === tool));
+  canvas.style.cursor = tool === "camera" ? "grab" : tool === "erase" ? "crosshair" : tool === "select" ? "default" : "crosshair";
+}
+function clampCamera() {
+  const vw = LOGICAL_WIDTH / viewScale, vh = LOGICAL_HEIGHT / viewScale;
+  cameraX = Math.max(0, Math.min(WORLD.width - vw, cameraX));
+  cameraY = Math.max(0, Math.min(WORLD.height - vh, cameraY));
+}
+function setZoom(nextScale, centerX = LOGICAL_WIDTH / 2, centerY = LOGICAL_HEIGHT / 2) {
+  const next = Math.max(0.5, Math.min(3, nextScale));
+  if (Math.abs(next - viewScale) < 0.001) return;
+  const worldX = cameraX + centerX / viewScale;
+  const worldY = cameraY + centerY / viewScale;
+  viewScale = next;
+  cameraX = worldX - centerX / viewScale;
+  cameraY = worldY - centerY / viewScale;
+  clampCamera();
+}
+function setEditorMode(enabled) {
+  editorMode = enabled;
+  document.body.classList.toggle("editor-mode", enabled);
+  modeToggle.textContent = enabled ? "Modo: Editor" : "Modo: Jogar";
+  modeToggle.setAttribute("aria-label", enabled ? "Voltar ao modo Jogar" : "Abrir modo Editor");
+  if (enabled) {
+    cameraX = Math.max(0, Math.min(WORLD.width - LOGICAL_WIDTH / viewScale, spawnAnchor.x - LOGICAL_WIDTH / (2 * viewScale)));
+    cameraY = Math.max(0, Math.min(WORLD.height - LOGICAL_HEIGHT / viewScale, spawnAnchor.y - LOGICAL_HEIGHT / (2 * viewScale)));
+    setTool("camera");
+  } else {
+    viewScale = 1;
+    spawn.x = spawnAnchor.x;
+    spawn.y = spawnAnchor.y;
+    resetPlayer();
+  }
+}
+modeToggle.addEventListener("click", () => setEditorMode(!editorMode));
+toolButtons.forEach(button => button.addEventListener("click", () => setTool(button.dataset.tool)));
+materialButtons.forEach(button => button.addEventListener("click", () => {
+  activeMaterial = button.dataset.material;
+  materialButtons.forEach(item => item.classList.toggle("selected", item === button));
+  if (activeMaterial === "spawn") setTool("place");
+  refreshHistoryButtons();
+}));
+function pointerWorldPosition(event) {
+  const rect = canvas.getBoundingClientRect();
+  return { x: (event.clientX - rect.left) * LOGICAL_WIDTH / rect.width / viewScale + cameraX,
+    y: (event.clientY - rect.top) * LOGICAL_HEIGHT / rect.height / viewScale + cameraY };
+}
+function tileKeyAt(x, y) { return `${Math.floor(x / 16) * 16},${Math.floor(y / 16) * 16}`; }
+function stateSnapshot() {
+  return {
+    tiles: platforms.map(tile => { const info = tileMaterialAndOrientation(tile); return info ? { x: tile.x, y: tile.y, material: info.material, orientation: info.orientation } : null; }).filter(Boolean),
+    spawn: { x: spawnAnchor.x, y: spawnAnchor.y },
+    name: phaseNameInput.value
+  };
+}
+function stateSignature(state) { return JSON.stringify(state); }
+function restoreSnapshot(state) {
+  platforms.splice(0, platforms.length, ...state.tiles.map(t => makeTile(t.material, t.x, t.y, t.orientation)));
+  spawnAnchor.x = state.spawn.x; spawnAnchor.y = state.spawn.y;
+  spawn.x = state.spawn.x; spawn.y = state.spawn.y;
+  phaseNameInput.value = state.name;
+  selection.clear();
+  resetPlayer();
+  scheduleAutosave();
+}
+function refreshHistoryButtons() {
+  undoButton.disabled = undoStack.length === 0;
+  redoButton.disabled = redoStack.length === 0;
+  if (applyMaterialButton) applyMaterialButton.disabled = selection.size === 0 || activeMaterial === "spawn";
+  duplicateButton.disabled = selection.size === 0;
+}
+function commitHistory(before) {
+  if (!before) return;
+  const after = stateSnapshot();
+  if (stateSignature(before) === stateSignature(after)) return;
+  undoStack.push(before);
+  if (undoStack.length > HISTORY_LIMIT) undoStack.shift();
+  redoStack.length = 0;
+  refreshHistoryButtons();
+  scheduleAutosave();
+}
+function undoAction() {
+  if (!undoStack.length) return;
+  const current = stateSnapshot();
+  const previous = undoStack.pop();
+  redoStack.push(current);
+  restoreSnapshot(previous);
+  refreshHistoryButtons();
+}
+function redoAction() {
+  if (!redoStack.length) return;
+  const current = stateSnapshot();
+  const next = redoStack.pop();
+  undoStack.push(current);
+  if (undoStack.length > HISTORY_LIMIT) undoStack.shift();
+  restoreSnapshot(next);
+  refreshHistoryButtons();
+}
+undoButton.addEventListener("click", undoAction);
+redoButton.addEventListener("click", redoAction);
+function validCell(gx, gy) { return gx >= 0 && gy >= 0 && gx < WORLD.width && gy < VOID_Y - 16; }
+function tileAtCell(gx, gy) {
+  return platforms.find(tile => tile.rectangles().some(rect => gx >= rect.x && gx < rect.x + rect.width && gy >= rect.y && gy < rect.y + rect.height));
+}
+function createTileAt(gx, gy, material = activeMaterial) {
+  if (!validCell(gx, gy)) return false;
+  if (material === "spawn") { spawnAnchor.x = gx; spawnAnchor.y = gy; spawn.x = gx; spawn.y = gy; return true; }
+  if (tileAtCell(gx, gy)) return false;
+  platforms.push(makeTile(material, gx, gy, 0));
+  return true;
+}
+let rotatedConveyorGroups = new Set();
+function editAt(worldX, worldY) {
+  const gx = Math.floor(worldX / 16) * 16, gy = Math.floor(worldY / 16) * 16;
+  const cellKey = `${gx},${gy}`;
+  if (cellKey === lastEditedCell) return;
+  lastEditedCell = cellKey;
+  if (activeTool === "erase") {
+    const index = platforms.findIndex(platform => platform.rectangles().some(rect => gx >= rect.x && gx < rect.x + rect.width && gy >= rect.y && gy < rect.y + rect.height));
+    if (index >= 0) platforms.splice(index, 1);
+    return;
+  }
+  if (activeTool !== "place") return;
+  const existing = tileAtCell(gx, gy);
+  if (existing && isConveyorTile(existing)) {
+    const component = getConnectedTiles(existing, isConveyorTile);
+    const groupKey = component.map(tile => tileKey(tile.x, tile.y)).sort().join("|");
+    if (!rotatedConveyorGroups.has(groupKey)) { rotatedConveyorGroups.add(groupKey); rotateConveyorComponent(existing); }
+    return;
+  }
+  if (activeMaterial === "spawn") { if (validCell(gx, gy)) { spawnAnchor.x = gx; spawnAnchor.y = gy; spawn.x = gx; spawn.y = gy; } return; }
+  createTileAt(gx, gy, activeMaterial);
+}
+function cellsInRect(a, b, includeInterior = true) {
+  const x1 = Math.min(a.x,b.x), x2 = Math.max(a.x,b.x), y1 = Math.min(a.y,b.y), y2 = Math.max(a.y,b.y);
+  const cells = [];
+  for (let y=y1; y<=y2; y+=16) for (let x=x1; x<=x2; x+=16) {
+    if (!includeInterior && x !== x1 && x !== x2 && y !== y1 && y !== y2) continue;
+    cells.push({x,y});
+  }
+  return cells;
+}
+function applyAreaTool(a, b) {
+  const cells = cellsInRect({x:Math.floor(a.x/16)*16,y:Math.floor(a.y/16)*16},{x:Math.floor(b.x/16)*16,y:Math.floor(b.y/16)*16}, activeTool !== "outline");
+  if (activeMaterial === "spawn") return;
+  if (activeTool === "line") {
+    const x1=Math.floor(a.x/16), y1=Math.floor(a.y/16), x2=Math.floor(b.x/16), y2=Math.floor(b.y/16);
+    const dx=Math.abs(x2-x1), sx=x1<x2?1:-1, dy=-Math.abs(y2-y1), sy=y1<y2?1:-1;
+    let err=dx+dy,x=x1,y=y1;
+    for (;;) { createTileAt(x*16,y*16,activeMaterial); if(x===x2&&y===y2) break; const e2=2*err; if(e2>=dy){err+=dy;x+=sx;} if(e2<=dx){err+=dx;y+=sy;} }
+  } else for (const c of cells) createTileAt(c.x,c.y,activeMaterial);
+}
+function selectedTiles() { return platforms.filter(tile => selection.has(tileKeyAt(tile.x,tile.y))); }
+function duplicateSelection(offsetX = null, offsetY = 0) {
+  const selected = selectedTiles(); if (!selected.length) return;
+  const before = stateSnapshot();
+  if (offsetX === null) offsetX = Math.max(...selected.map(tile => tile.x)) - Math.min(...selected.map(tile => tile.x)) + 32;
+  const copies = selected.map(tile => { const d=tileMaterialAndOrientation(tile); return {x:tile.x+offsetX,y:tile.y+offsetY,material:d.material,orientation:d.orientation}; });
+  if (copies.some(t => !validCell(t.x,t.y) || tileAtCell(t.x,t.y))) { phaseMessage("Não foi possível duplicar: há conflito ou limite do mapa."); return; }
+  for (const t of copies) platforms.push(makeTile(t.material,t.x,t.y,t.orientation));
+  selection = new Set(copies.map(t=>tileKeyAt(t.x,t.y)));
+  commitHistory(before);
+}
+duplicateButton.addEventListener("click", () => duplicateSelection());
+applyMaterialButton.addEventListener("click", () => {
+  const targets = selectedTiles();
+  if (!targets.length || activeMaterial === "spawn") return;
+  const before = stateSnapshot();
+  for (const tile of targets) {
+    const oldInfo = tileMaterialAndOrientation(tile);
+    const replacement = makeTile(activeMaterial, tile.x, tile.y, activeMaterial === "conveyorWall" ? oldInfo.orientation : 0);
+    const index = platforms.indexOf(tile);
+    if (index >= 0) platforms[index] = replacement;
+  }
+  selection = new Set(targets.map(tile => tileKeyAt(tile.x, tile.y)));
+  commitHistory(before);
+});
+canvas.addEventListener("pointerdown", event => {
+  if (!editorMode) return;
+  if (event.button !== undefined && event.button !== 0) return;
+  event.preventDefault();
+  canvas.setPointerCapture?.(event.pointerId);
+  const p = pointerWorldPosition(event);
+  previewWorld = p;
+  touchPoints.set(event.pointerId, {x:event.clientX,y:event.clientY});
+  if (touchPoints.size === 2) {
+    const pts=[...touchPoints.values()]; pinchState={distance:Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y),scale:viewScale};
+    pointerState=null; selectionDrag=null; gestureBefore=null; return;
+  }
+  gestureBefore = stateSnapshot();
+  pointerState = { id:event.pointerId,lastX:event.clientX,lastY:event.clientY,start:p,lastWorld:p,moved:false };
+  lastEditedCell = ""; rotatedConveyorGroups = new Set();
+  if (activeTool === "place" || activeTool === "erase") editAt(p.x,p.y);
+  else if (activeTool === "select") {
+    const gx=Math.floor(p.x/16)*16,gy=Math.floor(p.y/16)*16, hit=tileAtCell(gx,gy);
+    if (hit && selection.has(tileKeyAt(hit.x,hit.y))) selectionDrag={mode:"move",start:p,origins:selectedTiles().map(t=>({tile:t,x:t.x,y:t.y,info:tileMaterialAndOrientation(t)}))};
+    else selectionDrag={mode:"box",start:p,current:p};
+  }
+});
+canvas.addEventListener("pointermove", event => {
+  if (!editorMode) return;
+  if (touchPoints.has(event.pointerId)) touchPoints.set(event.pointerId,{x:event.clientX,y:event.clientY});
+  if (pinchState && touchPoints.size >= 2) {
+    const pts=[...touchPoints.values()], dist=Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y);
+    const rect=canvas.getBoundingClientRect(), cx=((pts[0].x+pts[1].x)/2-rect.left)*LOGICAL_WIDTH/rect.width, cy=((pts[0].y+pts[1].y)/2-rect.top)*LOGICAL_HEIGHT/rect.height;
+    setZoom(pinchState.scale*dist/Math.max(1,pinchState.distance),cx,cy); event.preventDefault(); return;
+  }
+  if (!pointerState || pointerState.id !== event.pointerId) {
+    previewWorld = pointerWorldPosition(event); return;
+  }
+  event.preventDefault();
+  const p=pointerWorldPosition(event);
+  if (Math.hypot(event.clientX-pointerState.lastX,event.clientY-pointerState.lastY)>1) pointerState.moved=true;
+  if (activeTool === "camera") {
+    const rect=canvas.getBoundingClientRect();
+    cameraX -= (event.clientX-pointerState.lastX)*LOGICAL_WIDTH/rect.width/viewScale;
+    cameraY -= (event.clientY-pointerState.lastY)*LOGICAL_HEIGHT/rect.height/viewScale;
+    clampCamera();
+  } else if (activeTool === "place" || activeTool === "erase") editAt(p.x,p.y);
+  else if (activeTool === "select" && selectionDrag) {
+    if (selectionDrag.mode === "box") selectionDrag.current=p;
+    else {
+      const dx=Math.round((p.x-selectionDrag.start.x)/16)*16,dy=Math.round((p.y-selectionDrag.start.y)/16)*16;
+      const origins=selectionDrag.origins;
+      for(const o of origins){o.tile.x=o.x+dx;o.tile.y=o.y+dy;}
+    }
+  }
+  pointerState.lastX=event.clientX; pointerState.lastY=event.clientY; pointerState.lastWorld=p; previewWorld=p;
+});
+function finishPointer(event) {
+  touchPoints.delete(event.pointerId);
+  if (touchPoints.size < 2) pinchState=null;
+  if (!pointerState || pointerState.id !== event.pointerId) return;
+  const p=pointerWorldPosition(event), start=pointerState.start;
+  if (activeTool === "select" && selectionDrag) {
+    if (selectionDrag.mode === "box") {
+      const a={x:Math.floor(selectionDrag.start.x/16)*16,y:Math.floor(selectionDrag.start.y/16)*16}, b={x:Math.floor(p.x/16)*16,y:Math.floor(p.y/16)*16};
+      selection.clear();
+      const x1=Math.min(a.x,b.x),x2=Math.max(a.x,b.x),y1=Math.min(a.y,b.y),y2=Math.max(a.y,b.y);
+      for(const t of platforms) if(t.x>=x1&&t.x<=x2&&t.y>=y1&&t.y<=y2) selection.add(tileKeyAt(t.x,t.y));
+    } else {
+      const origins=selectionDrag.origins;
+      if(origins.some(o=>!validCell(o.tile.x,o.tile.y)||platforms.some(other=>other!==o.tile&&other.rectangles().some(r=>o.tile.x>=r.x&&o.tile.x<r.x+r.width&&o.tile.y>=r.y&&o.tile.y<r.y+r.height)))) {
+        for(const o of origins){o.tile.x=o.x;o.tile.y=o.y;} phaseMessage("Movimento cancelado: conflito ou limite do mapa.");
+      } else selection=new Set(origins.map(o=>tileKeyAt(o.tile.x,o.tile.y)));
+    }
+    selectionDrag=null;
+    refreshHistoryButtons();
+  } else if (["rect","outline","line"].includes(activeTool)) applyAreaTool(start,p);
+  commitHistory(gestureBefore);
+  gestureBefore=null; pointerState=null;
+  canvas.style.cursor=activeTool==="camera"?"grab":activeTool==="erase"?"crosshair":"default";
+  refreshHistoryButtons();
+}
+canvas.addEventListener("pointerup", finishPointer);
+canvas.addEventListener("pointercancel", finishPointer);
+canvas.addEventListener("pointerleave", event => { if(!pointerState) previewWorld=null; });
+canvas.addEventListener("wheel", event => {
+  if (!editorMode) return; event.preventDefault();
+  const rect=canvas.getBoundingClientRect(),cx=(event.clientX-rect.left)*LOGICAL_WIDTH/rect.width,cy=(event.clientY-rect.top)*LOGICAL_HEIGHT/rect.height;
+  setZoom(viewScale*(event.deltaY<0?1.15:1/1.15),cx,cy);
+},{passive:false});
+zoomInButton.addEventListener("click",()=>setZoom(viewScale*1.25));
+zoomOutButton.addEventListener("click",()=>setZoom(viewScale/1.25));
+zoomResetButton.addEventListener("click",()=>setZoom(1));
+window.addEventListener("keydown",event=>{
+  if(!editorMode || isEditableTarget(event.target)) return;
+  if((event.ctrlKey||event.metaKey)&&event.code==="KeyZ"){event.preventDefault();event.shiftKey?redoAction():undoAction();}
+  else if((event.ctrlKey||event.metaKey)&&event.code==="KeyY"){event.preventDefault();redoAction();}
+  else if((event.ctrlKey||event.metaKey)&&event.code==="KeyC"){clipboardTiles=selectedTiles().map(t=>{const d=tileMaterialAndOrientation(t);return{x:t.x,y:t.y,material:d.material,orientation:d.orientation};});}
+  else if((event.ctrlKey||event.metaKey)&&event.code==="KeyV"){if(clipboardTiles.length){const before=stateSnapshot(), minX=Math.min(...clipboardTiles.map(t=>t.x)),minY=Math.min(...clipboardTiles.map(t=>t.y));const copies=clipboardTiles.map(t=>({...t,x:t.x-minX+Math.floor((cameraX+LOGICAL_WIDTH/(2*viewScale))/16)*16,y:t.y-minY+Math.floor((cameraY+LOGICAL_HEIGHT/(2*viewScale))/16)*16}));if(copies.every(t=>validCell(t.x,t.y)&&!tileAtCell(t.x,t.y))){for(const t of copies)platforms.push(makeTile(t.material,t.x,t.y,t.orientation));selection=new Set(copies.map(t=>tileKeyAt(t.x,t.y)));commitHistory(before);}}}
+  else if(event.code==="Escape"){selection.clear();selectionDrag=null;refreshHistoryButtons();}
+});
+refreshHistoryButtons();
+setTool("camera");
+
+const PHYSICS_STEP = 1 / 120;
+const MAX_FRAME_DELTA = 0.1;
+let previousTime = 0;
+let accumulator = 0;
+let perfSampleStart = 0;
+let perfFrameCount = 0;
+function frame(timestamp) {
+  visualTime = timestamp / 1000;
+  if (previousTime === 0) previousTime = timestamp;
+  const frameDeltaMs = Math.max(0, timestamp - previousTime);
+  const elapsed = frameDeltaMs / 1000;
+  previousTime = timestamp;
+
+  // Optional diagnostic: press F3 to see real rendered FPS and average frame time.
+  if (perfSampleStart === 0) perfSampleStart = timestamp;
+  perfFrameCount++;
+  const sampleDuration = timestamp - perfSampleStart;
+  if (sampleDuration >= 500) {
+    const fps = perfFrameCount * 1000 / sampleDuration;
+    const averageFrameMs = sampleDuration / perfFrameCount;
+    performanceMonitor.textContent = `FPS: ${fps.toFixed(0)} · quadro: ${averageFrameMs.toFixed(1)} ms`;
+    perfFrameCount = 0;
+    perfSampleStart = timestamp;
+  }
+  accumulator += Math.min(elapsed, MAX_FRAME_DELTA);
+
+  let firstStep = true;
+  while (accumulator >= PHYSICS_STEP) {
+    if (!editorMode) {
+      movePlayer(PHYSICS_STEP);
+      for (const platform of platforms) platform.update(PHYSICS_STEP, player);
+    }
+    // Presses are edge-triggered: only the first physics step sees a new press.
+    if (firstStep) {
+      pressed.clear();
+      firstStep = false;
+    }
+    accumulator -= PHYSICS_STEP;
+  }
+
+  if (!editorMode) {
+    cameraX = player.x + player.width / 2 - LOGICAL_WIDTH / (2 * viewScale);
+    cameraY = player.y + player.height / 2 - LOGICAL_HEIGHT / (2 * viewScale);
+    clampCamera();
+  }
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  ctx.drawImage(backgroundCanvas, cameraX * dpr, cameraY * dpr,
+    LOGICAL_WIDTH * dpr / viewScale, LOGICAL_HEIGHT * dpr / viewScale,
+    0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+  ctx.save();
+  ctx.scale(viewScale, viewScale);
+  ctx.translate(-cameraX, -cameraY);
+  // Linha de void desenhada por cima do fundo para ficar sempre visível.
+  ctx.strokeStyle = "#ff424f"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(cameraX, VOID_Y); ctx.lineTo(cameraX + LOGICAL_WIDTH / viewScale, VOID_Y); ctx.stroke();
+  for (const platform of platforms) platform.draw(ctx);
+  if (editorMode) {
+    ctx.save();
+    ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2;
+    ctx.fillStyle = "rgba(255,255,255,.10)";
+    ctx.fillRect(spawnAnchor.x, spawnAnchor.y, spawnAnchor.size, spawnAnchor.size);
+    ctx.strokeRect(spawnAnchor.x + 1, spawnAnchor.y + 1, spawnAnchor.size - 2, spawnAnchor.size - 2);
+    ctx.fillStyle = "#ffffff"; ctx.font = "bold 12px system-ui"; ctx.textAlign = "center";
+    ctx.fillText("S", spawnAnchor.x + 8, spawnAnchor.y + 12);
+    ctx.restore();
+    // Seleção, retângulo de seleção e prévia de construção.
+    if (selection.size) {
+      ctx.save(); ctx.strokeStyle="#fff3a6"; ctx.lineWidth=2/viewScale; ctx.setLineDash([5/viewScale,3/viewScale]);
+      for (const tile of selectedTiles()) ctx.strokeRect(tile.x+1,tile.y+1,14,14);
+      ctx.restore();
+    }
+    if (selectionDrag && selectionDrag.mode === "box") {
+      const a=selectionDrag.start,b=selectionDrag.current||a; ctx.save();ctx.fillStyle="rgba(105,190,255,.15)";ctx.strokeStyle="#69beff";ctx.lineWidth=2/viewScale;
+      ctx.fillRect(Math.min(a.x,b.x),Math.min(a.y,b.y),Math.abs(a.x-b.x)+16,Math.abs(a.y-b.y)+16);ctx.strokeRect(Math.min(a.x,b.x),Math.min(a.y,b.y),Math.abs(a.x-b.x)+16,Math.abs(a.y-b.y)+16);ctx.restore();
+    }
+    if (previewWorld && ["place","rect","outline","line"].includes(activeTool)) {
+      const gx=Math.floor(previewWorld.x/16)*16,gy=Math.floor(previewWorld.y/16)*16;
+      const existingPreview=tileAtCell(gx,gy);
+      const valid=validCell(gx,gy)&&(!existingPreview||activeTool!=="place"||isConveyorTile(existingPreview));
+      const colors={normalWall:"#52c878",iceWall:"#70d7f2",stickyWall:"#8b5a3c",bouncyWall:"#ffd84a",conveyorWall:"#8995a3",crumbleWall:"#c99a69",spawn:"#ffffff"};
+      ctx.save();ctx.globalAlpha=.48;ctx.fillStyle=valid?(colors[activeMaterial]||"#fff"):"#ff334f";ctx.strokeStyle=valid?"#8dffad":"#ff334f";ctx.lineWidth=2/viewScale;ctx.fillRect(gx,gy,16,16);ctx.strokeRect(gx+1,gy+1,14,14);ctx.restore();
+    }
+  } else {
+    drawPlayer();
+    drawStickyContactParticles(ctx);
+  }
+  ctx.restore();
+  updateHud();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
